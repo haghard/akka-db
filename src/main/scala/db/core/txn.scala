@@ -5,7 +5,7 @@ import org.rocksdb.{ RocksDBException, Transaction }
 
 import scala.util.control.{ NoStackTrace, NonFatal }
 
-object rocks {
+object txn {
 
   case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
 

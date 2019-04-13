@@ -83,7 +83,7 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
   }
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
-    rocks.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+    txn.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       val kb = key.getBytes(UTF_8)
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
@@ -95,13 +95,13 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
         if (prevCounter > 0) {
           val newCounter = (prevCounter - 1).toString
           txn.put(kb, newCounter.getBytes(UTF_8))
-        } else throw rocks.InvariantViolation(s"Key ${key} shouldn't go below 0")
+        } else throw db.core.txn.InvariantViolation(s"Key ${key} shouldn't go below 0")
       }
       Right(key)
     }.fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
 
   def get(key: String, replyTo: ActorRef): GetResponse = {
-    rocks.readTxn0(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+    txn.readTxn0(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
       val valueBts = txn.get(readOptions, key.getBytes(UTF_8))

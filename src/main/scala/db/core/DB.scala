@@ -100,7 +100,7 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
     (ref ask CPut(key, value, Node(addr.host.get, addr.port.get))).mapTo[PutResponse].flatMap {
       case PutSuccess(v, _) ⇒
         Future.successful(v)
-      case PutFailure(_, rocks.InvariantViolation(_), _) ⇒
+      case PutFailure(_, txn.InvariantViolation(_), _) ⇒
         Future.successful(key)
       case PutFailure(_, _, _) ⇒
         writeEventually(ref, key, value)

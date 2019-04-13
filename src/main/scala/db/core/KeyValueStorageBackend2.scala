@@ -91,7 +91,7 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
   }
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
-    rocks.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+    txn.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       val vtSer = vtSerRef.get
       val regSer = regSerRef.get
 
@@ -124,7 +124,7 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
     }.fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
 
   def get(key: String, replyTo: ActorRef): GetResponse = {
-    rocks.readTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+    txn.readTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       //val vtSer = vtSerRef.get
       val regSer = regSerRef.get
 
