@@ -1,0 +1,8 @@
+*/project/target
+*/project/project
+.DS_Store
+.idea
+target
+logs
+db
+

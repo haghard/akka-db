@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+import "scalapb/scalapb.proto";
+//import "google/protobuf/timestamp.proto";
+//import "google/protobuf/any.proto";
+
+package db.core.serialization;
+
+
+message VectorTimePB {
+  map<string, int64> values = 1;
+}
+
+message MVRegisterPB {
+  repeated VersionedPB vts = 1;
+}
+
+message VersionedPB {
+  string value = 1;
+  VectorTimePB vt = 2;
+}
