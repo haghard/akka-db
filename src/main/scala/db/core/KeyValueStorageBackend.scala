@@ -27,7 +27,7 @@ object KeyValueStorageBackend {
 https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/TransactionSample.java
 https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/OptimisticTransactionSample.java
 
-    This example: Sell N(500) tickets concurrency
+    This example: Sell N tickets concurrency
 
     SNAPSHOT ISOLATION (Can't be totaly available)
     https://jepsen.io/consistency/models/snapshot-isolation
