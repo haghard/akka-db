@@ -1,7 +1,5 @@
 package db.core
 
-import java.util.UUID
-import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
@@ -11,7 +9,7 @@ import db.hashing
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.Future
-import scala.util.{ Failure, Random, Success }
+import scala.util.{ Failure, Success }
 import DB._
 import akka.pattern.ask
 
