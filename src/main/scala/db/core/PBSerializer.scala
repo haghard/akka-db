@@ -19,8 +19,7 @@ class PBSerializer(val system: ExtendedActorSystem) extends SerializerWithString
       case r: MVRegister[String] ⇒
         val a: Seq[db.core.serialization.protocolV0.VersionedPB] =
           r.versioned.map { v ⇒
-            db.core.serialization.protocolV0.VersionedPB(
-              v.value,
+            db.core.serialization.protocolV0.VersionedPB(v.value,
               Some(db.core.serialization.protocolV0.VectorTimePB(v.vectorTimestamp.value)))
           }.toSeq
 
