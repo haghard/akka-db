@@ -15,3 +15,12 @@ https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-
 https://fauna.com/blog/a-comparison-of-scalable-database-isolation-levels
 
 https://github.com/justin-db/JustinDB
+
+
+
+#Typed actors
+https://github.com/hseeberger/welcome-akka-typed/blob/master/src/main/scala/rocks/heikoseeberger/wat/typed/Transfer.scala
+https://doc.akka.io/docs/akka/current/typed/routers.html
+https://doc.akka.io/docs/akka/current/typed/distributed-data.html
+https://github.com/johanandren/akka-typed-samples.git
+https://github.com/hseeberger/whirlwind-tour-akka.git

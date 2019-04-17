@@ -5,7 +5,7 @@ import scalariform.formatter.preferences._
 
 val akkaVersion = "2.5.22"
 
-resolvers += Resolver.sonatypeRepo("snapshots")
+//resolvers += Resolver.sonatypeRepo("snapshots")
 
 val `akka-db` = project
   .in(file("."))
@@ -22,7 +22,7 @@ val `akka-db` = project
     //javaOptions in run ++= Seq("-Xms128m", "-Xmx1024m"),
 
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-http" % "10.1.7",
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
 
