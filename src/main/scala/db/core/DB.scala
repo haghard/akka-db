@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.actor._
 import akka.cluster.{ Cluster, MemberStatus }
 import akka.cluster.ClusterEvent._
-import db.hashing
+import db.{ Runner, hashing }
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.Future
@@ -45,7 +45,7 @@ object DB {
     Props(new DB(cluster, startWith, RF, WC)).withDispatcher("akka.db-io")
 }
 
-class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor with ActorLogging
+class DB(cluster: Cluster, startWith: Long, RF: Int, writeConsistency: Int) extends Actor with ActorLogging
   with akka.actor.Timers with Stash {
 
   val addr = cluster.selfAddress
@@ -125,19 +125,17 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
     case WriteDataTick ⇒
       //startWith
       val key = keys(i.toInt % keys.size)
-      val replicas: Set[Replica] = hash.shardFor(key.toString, rf)
+      val replicas: Set[Replica] = hash.shardFor(key.toString, RF)
       val availableRep = replicas.filter(r ⇒ !removedMembers.exists(_ == r.addr))
 
-      val availableRefs = availableRep.map { r ⇒
-        context.actorSelection(RootActorPath(r.addr) / "user" / PathSegment)
-      }
+      val availableRefs = availableRep.map(r ⇒ context.actorSelection(RootActorPath(r.addr) / "user" / PathSegment))
       val unAvailableReplicas = replicas.filter(r ⇒ removedMembers.exists(_ == r.addr))
 
       /*log.info("replicate {} -> [{}] av:[{}]", key.toString, replicas.map(_.addr).mkString(" - "),
         available.map(_.addr).mkString(" - "))*/
 
       //check WriteConsistency
-      if (availableRefs.size >= writeC) {
+      if (availableRefs.size >= writeConsistency) {
 
         if (unAvailableReplicas.nonEmpty)
           log.warning("{} store hint for:[{}]", key.toString, unAvailableReplicas.map(_.addr).mkString(","))
@@ -167,7 +165,7 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
           case Failure(ex) ⇒
         }
       } else
-        log.error(s"Couldn't meet cl:{} for write {}", writeC, key)
+        log.error(s"Couldn't meet cl:{} for write {}", writeConsistency, key)
 
       context become active(availableMembers, removedMembers, hash, i + 1l)
   }

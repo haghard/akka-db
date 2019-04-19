@@ -13,6 +13,7 @@ import java.nio.file.{ Files, Paths }
 import scala.concurrent.Future
 import DB._
 import akka.pattern.pipe
+import db.Runner
 
 import scala.util.Try
 
@@ -27,9 +28,9 @@ object KeyValueStorageBackend {
 https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/TransactionSample.java
 https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/OptimisticTransactionSample.java
 
-    This example: Sell N tickets concurrency
+    This example: Sell N tickets concurrently
 
-    SNAPSHOT ISOLATION (Can't be totaly available)
+    SNAPSHOT ISOLATION (Can't be totally available)
     https://jepsen.io/consistency/models/snapshot-isolation
 
       When a txn starts, it sees a consistent snapshot of the db that existed at the moment that the txn started.
