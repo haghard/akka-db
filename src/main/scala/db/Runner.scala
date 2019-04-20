@@ -1,10 +1,9 @@
-package db.core
+package db
 
 import akka.actor.ActorSystem
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.Helpers
-
+import db.core.{ DB, KeyValueStorageBackend2 }
 import scala.concurrent.duration._
 
 //runMain db.core.Runner
