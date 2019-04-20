@@ -1,5 +1,7 @@
 package db
 
+import akka.actor.typed.DispatcherSelector
+import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
 import db.core.{ DbReplica, KeyValueStorageBackend2 }
@@ -31,14 +33,7 @@ object Runner extends App {
           #remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
 
-          db-io {
-           type = "Dispatcher"
-           executor = "fork-join-executor"
-           fork-join-executor {
-             parallelism-min = 2
-             parallelism-max = 4
-           }
-         }
+
        }
       """)
 
@@ -59,16 +54,25 @@ object Runner extends App {
   import akka.actor.typed.scaladsl.adapter._
 
   val alphaSys = akka.actor.typed.ActorSystem(
-    DbReplica(RF, CL, 0l), systemName,
-    portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
+    Behaviors.setup[Unit] { ctx ⇒
+      ctx.spawn(DbReplica(RF, CL, 0l), "alpha", DispatcherSelector.fromConfig("akka.db-io"))
+      Behaviors.ignore
+    },
+    systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
 
   val bettaSys = akka.actor.typed.ActorSystem(
-    DbReplica(RF, CL, 1l), systemName,
-    portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
+    Behaviors.setup[Unit] { ctx ⇒
+      ctx.spawn(DbReplica(RF, CL, 1l), "betta", DispatcherSelector.fromConfig("akka.db-io"))
+      Behaviors.ignore
+    },
+    systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
 
   val gammaSys = akka.actor.typed.ActorSystem(
-    DbReplica(RF, CL, 2l), systemName,
-    portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
+    Behaviors.setup[Unit] { ctx ⇒
+      ctx.spawn(DbReplica(RF, CL, 2l), "gamma", DispatcherSelector.fromConfig("akka.db-io"))
+      Behaviors.ignore
+    },
+    systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
 
   val alpha = Cluster(alphaSys.toUntyped)
   val betta = Cluster(bettaSys.toUntyped)
@@ -104,15 +108,17 @@ object Runner extends App {
   Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys2)*/
 
   Helpers.wait(10.second)
-
-  gamma.leave(gamma.selfAddress)
+  println("gamma patritioned")
+  //gamma.leave(gamma.selfAddress)
   gammaSys.terminate
 
   Helpers.wait(20.second)
 
+  //println("betta patritioned")
+  betta.leave(alpha.selfAddress)
+  bettaSys.terminate
+
+  //Helpers.wait(30.second)
   alpha.leave(alpha.selfAddress)
   alphaSys.terminate
-
-  betta.leave(betta.selfAddress)
-  bettaSys.terminate
 }

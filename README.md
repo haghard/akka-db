@@ -18,4 +18,5 @@ https://github.com/justin-db/JustinDB
 
 
 #Akka-cluster split brain
+https://github.com/TanUkkii007/akka-cluster-custom-downing
 https://scalac.io/split-brain-scenarios-with-akka-scala/
