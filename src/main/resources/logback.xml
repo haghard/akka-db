@@ -9,7 +9,7 @@
     <file>logs/server.log</file>
     <append>true</append>
     <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-      <fileNamePattern>"logs/%d{yyyy-MM-dd}/server-%i.log"</fileNamePattern>
+      <fileNamePattern>"logs/%d{yyyy-MM-dd}/akka-db-%i.log"</fileNamePattern>
       <maxFileSize>50MB</maxFileSize>
     </rollingPolicy>
     <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
@@ -38,6 +38,12 @@
       <pattern>%d{HH:mm:ss.SSS} [%X{sourceThread}] %-5level %logger{36} %X{akkaSource} – %msg%n</pattern>
     </encoder>
   </appender>-->
+
+
+  <!--aeron tcp-->
+  <logger name="akka.stream.scaladsl.RestartWithBackoffFlow" level="error"/>
+  <logger name="akka.stream.Materializer" level="off"/>
+  <!--<logger name="akka.remote.artery.Association" level="off"/>-->
 
   <appender name="asyncFile" class="ch.qos.logback.classic.AsyncAppender">
     <appender-ref ref="SERVER"/>

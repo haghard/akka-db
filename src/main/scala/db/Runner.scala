@@ -18,22 +18,15 @@ object Runner extends App {
        akka {
           cluster {
             roles = [ db-replica ]
-
             jmx.multi-mbeans-in-same-jvm = on
-
-            //This means that the cluster leader member will change the unreachable node status to down automatically after the configured time of unreachability.
-            //auto-down-unreachable-after = 2 s
-
             shutdown-after-unsuccessful-join-seed-nodes = 30s
           }
 
           actor.provider = cluster
 
           remote.artery.enabled = true
-          #remote.artery.transport = tcp
+          remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
-
-
        }
       """)
 
