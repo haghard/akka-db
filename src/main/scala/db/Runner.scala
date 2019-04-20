@@ -28,7 +28,7 @@ object Runner extends App {
           actor.provider = cluster
 
           remote.artery.enabled = true
-          #remote.artery.transport = tcp
+          remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
 
           db-io {
