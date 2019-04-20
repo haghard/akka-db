@@ -12,9 +12,9 @@ object txn {
   private def txnErrorHandler(txn: Transaction, logger: LoggingAdapter): PartialFunction[Throwable, Either[Throwable, String]] = {
     //concurrent modification
     case ex: RocksDBException ⇒
-      logger.error(s"Transact error: ${ex.getStatus.getCode.name}")
+      logger.error(s"RocksDBTransact error: ${ex.getStatus.getCode.name}")
       txn.rollback()
-      Left(new Exception(s"Transact error: ${ex.getStatus.getCode.name}"))
+      Left(new Exception(s"RocksDBTransact error: ${ex.getStatus.getCode.name}"))
     case NonFatal(ex) ⇒
       logger.error(s"Transact error: ${ex.getMessage}")
       txn.rollback()

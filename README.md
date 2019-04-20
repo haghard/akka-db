@@ -15,3 +15,7 @@ https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-
 https://fauna.com/blog/a-comparison-of-scalable-database-isolation-levels
 
 https://github.com/justin-db/JustinDB
+
+
+#Akka-cluster split brain
+https://scalac.io/split-brain-scenarios-with-akka-scala/

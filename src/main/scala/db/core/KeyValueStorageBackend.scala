@@ -13,6 +13,7 @@ import java.nio.file.{ Files, Paths }
 import scala.concurrent.Future
 import DB._
 import akka.pattern.pipe
+import db.Runner
 
 import scala.util.Try
 
@@ -47,7 +48,7 @@ https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/Optim
 class KeyValueStorageBackend extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
 
-  val path = "db"
+  val path = "rocks-db"
 
   Try(Files.createDirectory(Paths.get(s"./$path")))
 

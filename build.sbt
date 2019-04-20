@@ -19,7 +19,7 @@ val `akka-db` = project
 
     javacOptions in Compile ++= Seq("-Xlint:unchecked", "-Xlint:deprecation"),
 
-    //javaOptions in run ++= Seq("-Xms128m", "-Xmx1024m"),
+    //javaOptions in run ++= Seq("-Xmx3G", "-XX:MaxMetaspaceSize=2500MB", "-XX:+UseG1GC"),
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
@@ -42,7 +42,7 @@ val `akka-db` = project
 
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion),
 
-    //fork in run := true,
+    fork in run := true,
 
     // disable parallel tests
     parallelExecution in Test := false,

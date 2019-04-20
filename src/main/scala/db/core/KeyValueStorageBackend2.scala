@@ -20,7 +20,7 @@ import KeyValueStorageBackend2._
 
 object KeyValueStorageBackend2 {
 
-  val path = "db"
+  val path = "rocks-db"
 
   val keyPostfix = ".vt"
 

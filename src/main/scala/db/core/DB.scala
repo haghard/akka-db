@@ -5,11 +5,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.actor._
 import akka.cluster.{ Cluster, MemberStatus }
 import akka.cluster.ClusterEvent._
-import db.hashing
+import db.{ Runner, hashing }
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.Future
-import scala.util.{ Failure, Success }
+import scala.util.{ Failure, Success, Try }
 import DB._
 import akka.pattern.ask
 
@@ -57,15 +57,17 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
   implicit val ec = context.dispatcher
   implicit val writeTimeout = akka.util.Timeout(1000.millis)
 
-  override def postStop(): Unit =
+  override def postStop(): Unit = {
     cluster.unsubscribe(self)
+  }
 
   override def preStart = {
     cluster.subscribe(self, classOf[ClusterDomainEvent])
+    //timers.startPeriodicTimer("tick" + startWith, WriteDataTick, 150.millis)
     timers.startSingleTimer(WriteDataTick, WriteDataTick, 2.seconds)
   }
 
-  def awaitClusterConvergence(availableMembers: SortedSet[Address], removedMembers: SortedSet[Address],
+  def awaitForConvergence(availableMembers: SortedSet[Address], removedMembers: SortedSet[Address],
     hash: hashing.Rendezvous[Replica], i: Long): Receive = {
 
     case ReachableMember(member) ⇒
@@ -75,7 +77,7 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
 
     case UnreachableMember(member) ⇒
       log.info("UnreachableMember = {}", member.address)
-      context.become(awaitClusterConvergence(availableMembers, removedMembers, hash, i))
+      context.become(awaitForConvergence(availableMembers, removedMembers, hash, i))
 
     case MemberRemoved(member, prev) ⇒
       if (prev == MemberStatus.Exiting)
@@ -88,6 +90,7 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
       context.become(active(availableMembers - member.address, removedMembers + member.address, hash, i))
 
     case WriteDataTick ⇒
+      log.info("stash tick")
       stash()
 
     case _ ⇒
@@ -114,7 +117,8 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
 
     case UnreachableMember(member) ⇒
       log.warning("UnreachableMember = {}", member.address)
-      context become awaitClusterConvergence(availableMembers, removedMembers, hash, i)
+      context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
+      context become awaitForConvergence(availableMembers, removedMembers, hash, i)
 
     case state: CurrentClusterState ⇒
       val avMembers = state.members.filter(_.status == MemberStatus.Up).map(_.address)
@@ -125,33 +129,31 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
     case WriteDataTick ⇒
       //startWith
       val key = keys(i.toInt % keys.size)
-      val replicas: Set[Replica] = hash.shardFor(key.toString, rf)
+      val replicas: Set[Replica] = Try(hash.shardFor(key.toString, rf)).getOrElse(Set.empty)
+
       val availableRep = replicas.filter(r ⇒ !removedMembers.exists(_ == r.addr))
 
-      val availableRefs = availableRep.map { r ⇒
-        context.actorSelection(RootActorPath(r.addr) / "user" / PathSegment)
-      }
+      val availableRefs = availableRep
+        .map(r ⇒ context.actorSelection(RootActorPath(r.addr) / "user" / PathSegment))
+
       val unAvailableReplicas = replicas.filter(r ⇒ removedMembers.exists(_ == r.addr))
 
-      /*log.info("replicate {} -> [{}] av:[{}]", key.toString, replicas.map(_.addr).mkString(" - "),
-        available.map(_.addr).mkString(" - "))*/
+      log.info("key {} -> [{}] av:[{}]", key.toString, replicas.map(_.addr.port).mkString(";"),
+                                         availableRep.map(_.addr.port).mkString(";"))
 
-      //check WriteConsistency
+      //WriteConsistency check
       if (availableRefs.size >= writeC) {
-
         if (unAvailableReplicas.nonEmpty)
-          log.warning("{} store hint for:[{}]", key.toString, unAvailableReplicas.map(_.addr).mkString(","))
-
-        //(Random.shuffle(availableRefs.toVector)
+          log.error("{} store hint for:[{}]", key.toString, unAvailableReplicas.map(_.addr).mkString(","))
 
         Future.traverse(availableRefs.toVector) { ref ⇒
           val value = i.toString
           writeEventually(ref, key, value).flatMap { k ⇒
             (ref ask CGet(k)).mapTo[GetResponse].map {
-              case GetSuccess(v, _) ⇒ //KeyValueStorageBackend2
+              case GetSuccess(v, _) ⇒
                 v.filter(_.contains(value)).isDefined
               //v.getOrElse(Set.empty[String]).size == 1
-              case GetSuccess0(v, _)   ⇒ v //KeyValueStorageBackend
+              case GetSuccess0(v, _)   ⇒ v
               case GetFailure(_, _, _) ⇒ None
             }
           }
@@ -161,13 +163,15 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
               //rs.filter(_ == false).foreach { _ ⇒
               log.info("{} [{}]", key, rs.mkString(","))
               //}
-              //context.system.scheduler.scheduleOnce(50.millis)(self ! WriteDataTick)
-              self ! WriteDataTick
+              context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
+              //self ! WriteDataTick
             }
           case Failure(ex) ⇒
         }
-      } else
+      } else {
+        context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
         log.error(s"Couldn't meet cl:{} for write {}", writeC, key)
+      }
 
       context become active(availableMembers, removedMembers, hash, i + 1l)
   }

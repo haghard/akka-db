@@ -6,47 +6,45 @@ import com.typesafe.config.ConfigFactory
 import db.core.{ DB, KeyValueStorageBackend2 }
 import scala.concurrent.duration._
 
-//runMain db.core.Runner
+//runMain db.Runner
 object Runner extends App {
 
-  val systemName = "akka-db"
+  val systemName = "db"
 
   val config = ConfigFactory.parseString(
     s"""
        akka {
-
-          db-io {
-            type = Dispatcher
-            executor = "thread-pool-executor"
-            thread-pool-executor {
-              fixed-pool-size = 6
-            }
-            throughput = 1000
-          }
-
           cluster {
-            roles = [ db ]
+            roles = [ db-replica ]
 
-            akka.cluster.jmx.multi-mbeans-in-same-jvm = on
+            jmx.multi-mbeans-in-same-jvm = on
 
             //This means that the cluster leader member will change the unreachable node status to down automatically after the configured time of unreachability.
-            //auto-down-unreachable-after = 1 s
+            //auto-down-unreachable-after = 2 s
 
             shutdown-after-unsuccessful-join-seed-nodes = 30s
           }
 
           actor.provider = cluster
 
-          #remote.netty.tcp.hostname = 127.0.0.1
-
           remote.artery.enabled = true
+          #remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
 
+          db-io {
+           type = "Dispatcher"
+           executor = "fork-join-executor"
+           fork-join-executor {
+             parallelism-min = 2
+             parallelism-max = 4
+           }
+         }
        }
       """)
 
   def portConfig(port: Int) =
     ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
+
   //ConfigFactory.parseString(s"akka.remote.netty.tcp.port = $port")
 
   /*
@@ -54,69 +52,63 @@ object Runner extends App {
     For example, with 3x replication, one failure can be tolerated; with 5x replication, two failures, and so on.
   */
 
-  val node1 = ActorSystem(systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
-  val node2 = ActorSystem(systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
-  val node3 = ActorSystem(systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
-  //val node4 = ActorSystem(systemName, portConfig(2553).withFallback(config).withFallback(ConfigFactory.load()))
-
-  val node1Cluster = Cluster(node1)
-  val node2Cluster = Cluster(node2)
-  val node3Cluster = Cluster(node3)
-  //val node4Cluster = Cluster(node4)
-
-  node1Cluster.join(node1Cluster.selfAddress)
-  node2Cluster.join(node1Cluster.selfAddress)
-  node3Cluster.join(node1Cluster.selfAddress)
-  //node4Cluster.join(node1Cluster.selfAddress)
-
-  Helpers.waitForAllNodesUp(node1, node2, node3)
-
   val RF = 3
   val CL = 3
+  val ticketNmr = 500000
 
-  val ticketNmr = 500
+  val alphaSys = ActorSystem(systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
+  val bettaSys = ActorSystem(systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
+  val gammaSys = ActorSystem(systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
 
-  node1.actorOf(DB.props(node1Cluster, 0l, RF, CL), "alpha")
-  node2.actorOf(DB.props(node2Cluster, 0l, RF, CL), "betta")
-  node3.actorOf(DB.props(node3Cluster, 0l, RF, CL), "gamma")
-  //node4.actorOf(Cassandra.props(node4Cluster, 1.seconds, 300, RF, CL), "delta")
+  val alpha = Cluster(alphaSys)
+  val betta = Cluster(bettaSys)
+  val gamma = Cluster(gammaSys)
 
-  //
-  node1.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  node2.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  node3.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  //node4.actorOf(KeyValueStorageBackend2.props, Cassandra.PathSegment)
+  alpha.join(alpha.selfAddress)
+  betta.join(alpha.selfAddress)
+  gamma.join(alpha.selfAddress)
+
+  Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys)
+
+  alphaSys.actorOf(DB.props(alpha, 0l, RF, CL), "alpha")
+  bettaSys.actorOf(DB.props(betta, 1l, RF, CL), "betta")
+  gammaSys.actorOf(DB.props(gamma, 2l, RF, CL), "gamma")
+
+  alphaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
+  bettaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
+  gammaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
+
+  Helpers.wait(20.second)
+
+  println("****************** Kill gamma *********************")
+  gamma.leave(gamma.selfAddress)
+  gammaSys.terminate
+
+  Helpers.wait(20.second)
+
+  println("****************** new incarnation of gamma joins the cluster *********************")
+  val gammaSys2 = ActorSystem(systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
+  val gamma2 = Cluster(gammaSys2)
+  gamma2.join(alpha.selfAddress)
+  gammaSys2.actorOf(DB.props(gamma2, 2l, RF, CL), "gamma")
+  gammaSys2.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
+
+  Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys2)
 
   Helpers.wait(30.second)
+
+  alpha.leave(alpha.selfAddress)
+  alphaSys.terminate
+
+  betta.leave(betta.selfAddress)
+  bettaSys.terminate
 
   /*
-  println("****************** Kill node3 *********************")
   node3Cluster.leave(node3Cluster.selfAddress)
   node3.terminate
+  */
 
+  gamma2.leave(gamma2.selfAddress)
+  gammaSys2.terminate
 
-  Helpers.wait(30.second)
-
-  println("****************** new incarnation of node3 joins the cluster *********************")
-  val node31 = ActorSystem(systemName, portConfig(2552).withFallback(config))
-  val node31Cluster = Cluster(node31)
-  node31Cluster.join(node1Cluster.selfAddress)
-  node31.actorOf(Cassandra.props(node31Cluster, 2.seconds, 200, RF, CL), "gamma")
-  node31.actorOf(CassandraBackend.props, Cassandra.PathSegment)
-
-  Helpers.waitForAllNodesUp(node1, node2, node31)
-
-  Helpers.wait(30.second)*/
-
-  node1Cluster.leave(node1Cluster.selfAddress)
-  node1.terminate
-
-  node2Cluster.leave(node2Cluster.selfAddress)
-  node2.terminate
-
-  node3Cluster.leave(node3Cluster.selfAddress)
-  node3.terminate
-
-  /*node31Cluster.leave(node31Cluster.selfAddress)
-  node31.terminate*/
 }
