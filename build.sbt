@@ -22,7 +22,7 @@ val `akka-db` = project
     //javaOptions in run ++= Seq("-Xmx3G", "-XX:MaxMetaspaceSize=2500MB", "-XX:+UseG1GC"),
 
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-cluster" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-http" % "10.1.7",
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
 

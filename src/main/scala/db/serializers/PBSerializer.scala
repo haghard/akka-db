@@ -1,9 +1,9 @@
-package db.core
+package db.serializers
 
 import akka.actor.ExtendedActorSystem
 import akka.serialization.SerializerWithStringManifest
-import com.rbmhtechnology.eventuate.{ VectorTime, Versioned }
 import com.rbmhtechnology.eventuate.crdt.MVRegister
+import com.rbmhtechnology.eventuate.{ VectorTime, Versioned }
 
 class PBSerializer(val system: ExtendedActorSystem) extends SerializerWithStringManifest {
   override val identifier: Int = 99999
