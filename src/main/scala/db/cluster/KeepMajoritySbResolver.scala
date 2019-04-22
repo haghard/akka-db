@@ -48,6 +48,10 @@ class SplitBrainResolver(system: ActorSystem) extends DowningProvider {
 }
 
 /**
+ *
+ * The idea being here is that we want the first seed node to survive
+ *
+ *
  * Uses the criteria of the majority to autodown nodes avoiding network partition problems.
  * It checks if a node belongs to the majority of the cluster before letting it down an unreachable node.
  * (http://stackoverflow.com/questions/30575174/how-to-configure-downing-in-akka-cluster-when-a-singleton-is-present)
@@ -85,13 +89,34 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
   }
 
   /*
-    If only two nodes left in the cluster (a,b) and both are seed nodes and network partitions happens
-    then:
-      On a we down b
-        and
-      On b down self
+    The idea being here is that we want the first seed node to survive.
+    The key being is the decision must be the same on both sides but opposite.
 
-    The idea being here is that we want the first seed node to survive
+    a) If only two nodes left in the cluster (a,b) in this order and they both on the seed nodes list and a network partition happens
+    then the following scenarios are possible:
+      The key being is the decision must be the same on both sides but opposite: On A we bring down B, On B we kill self.
+      Which means:
+        If they both(A and B) are healthy and it's a pure np then: B kills itself, A stays (because A is a first seed node). As a result you end up with one node cluster (A)
+        If A is killed(not a graceful exit) but b is healthy then: B kills itself. As a result you end up with zero nodes
+        If B is killed(not a graceful exit) but a is healthy then: B stays. As a result you end up with one node cluster (A)
+
+
+    b) If only 2 node left A and B, and both aren't seed nodes and a network partition happens then the following scenarios are possible:
+      Let's assume A has a lowest address then B has
+      The key being is the decision must be the same on both sides but opposite: On A we bring down B, On B we kill self.
+        Which means:
+          If they both(A and B) are healthy and it's a pure np then: B kills itself, A stays. As a result you end up with one node cluster (A)
+          If A is killed(not a graceful exit) but B is healthy then: B kills itself. As a result you end up with zero nodes
+          If B is killed(not a graceful exit) but A is healthy then: A kills B. As a result you end up with one node cluster (A)
+
+    C) If only 2 node left A and B, and A if on seed node list but B is not on the list and a network partition happens
+      then the following scenarios are possible:
+        The key being is the decision must be the same on both sides but opposite: On A we bring down B, On B we kill self.
+      Which means:
+        If they both(A and B) are healthy and it's a pure np then: B kills itself, A stays (because A is a seed node). As a result you end up with one node cluster (A)
+        If A is killed(not a graceful exit) but b is healthy then: B kills itself. As a result you end up with zero nodes
+        If B is killed(not a graceful exit) but a is healthy then: B stays. As a result you end up with one node cluster (A)
+
   */
   def resolveLastTwo: Receive = {
     case KeepMajoritySbResolver.UnreachableTimeoutLast2(member) ⇒
@@ -100,7 +125,7 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
         //none of them is in the seed-nodes
         if (!seeds.contains(cluster.selfUniqueAddress.address) && !seeds.contains(member.uniqueAddress.address)) {
           log.error("ResolveLastTwo(none of them is in the seed-nodes)")
-          //keep oldest
+          //keep lowest address
           if (Member.addressOrdering.compare(cluster.selfUniqueAddress.address, member.uniqueAddress.address) < 0) {
             log.error("ResolveLastTwo: Keep self, force exit member: {}", member)
             cluster.down(member.address)
