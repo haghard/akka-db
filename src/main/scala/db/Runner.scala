@@ -1,6 +1,7 @@
 package db
 
-import akka.actor.typed.DispatcherSelector
+
+import akka.actor.typed.{ Behavior, DispatcherSelector, Terminated }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
@@ -33,8 +34,6 @@ object Runner extends App {
   def portConfig(port: Int) =
     ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
 
-  //ConfigFactory.parseString(s"akka.remote.netty.tcp.port = $port")
-
   /*
     The number of failures that can be tolerated is equal to (Replication factor - 1) /2.
     For example, with 3x replication, one failure can be tolerated; with 5x replication, two failures, and so on.
@@ -46,36 +45,100 @@ object Runner extends App {
 
   import akka.actor.typed.scaladsl.adapter._
 
-  val alphaSys = akka.actor.typed.ActorSystem(
+  def alphaSys = akka.actor.typed.ActorSystem(
+    //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      ctx.spawn(DbReplica(RF, CL, 0l), "alpha", DispatcherSelector.fromConfig("akka.db-io"))
-      Behaviors.ignore
+      val replica = ctx.spawn(DbReplica(RF, CL, 0l), "alpha", DispatcherSelector.fromConfig("akka.db-io"))
+      ctx.watch(replica)
+
+      ctx.spawn(
+        Behaviors.withTimers[Symbol] { ctx0 ⇒
+          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
+          Behaviors.receiveMessage {
+            case 'hb ⇒
+              ctx.log.info("{} hb", 0l)
+              Behaviors.same
+          }
+        }, "nb")
+
+      Behaviors.receiveSignal {
+        case (ctx0, Terminated(`replica`)) ⇒
+          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
+          Behaviors.stopped
+      }
     },
     systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
 
-  val bettaSys = akka.actor.typed.ActorSystem(
+  def bettaSys = akka.actor.typed.ActorSystem(
+    //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      ctx.spawn(DbReplica(RF, CL, 1l), "betta", DispatcherSelector.fromConfig("akka.db-io"))
-      Behaviors.ignore
+      val replica = ctx.spawn(DbReplica(RF, CL, 1l), "betta", DispatcherSelector.fromConfig("akka.db-io"))
+      ctx.watch(replica)
+
+      ctx.spawn(
+        Behaviors.withTimers[Symbol] { ctx0 ⇒
+          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
+          Behaviors.receiveMessage {
+            case 'hb ⇒
+              ctx.log.info("{} hb", 1l)
+              Behaviors.same
+          }
+        }, "nb")
+
+      Behaviors.receiveSignal {
+        case (ctx0, Terminated(`replica`)) ⇒
+          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
+          Behaviors.stopped
+      }
     },
     systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
 
-  val gammaSys = akka.actor.typed.ActorSystem(
+  def gammaSys = akka.actor.typed.ActorSystem(
+    //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      ctx.spawn(DbReplica(RF, CL, 2l), "gamma", DispatcherSelector.fromConfig("akka.db-io"))
-      Behaviors.ignore
+      val replica = ctx.spawn(DbReplica(RF, CL, 2l), "gamma", DispatcherSelector.fromConfig("akka.db-io"))
+      ctx.watch(replica)
+
+      val hb = ctx.spawn(
+        Behaviors.withTimers[Symbol] { ctx0 ⇒
+          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
+
+          def active(cd: Int): Behavior[Symbol] =
+            Behaviors.receiveMessage {
+              case 'hb ⇒
+                ctx.log.info("{} hb", 2l)
+                if (cd == 0)
+                  throw new Exception("Boooommm !!!!!")
+                active(cd - 1)
+            }
+
+          active(500)
+        }, "nb")
+
+      ctx.watch(hb)
+
+      Behaviors.receiveSignal {
+        case (ctx0, Terminated(a /*`replica`*/ )) ⇒
+          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected: {}", a)
+          Behaviors.stopped
+      }
     },
     systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
 
-  val alpha = Cluster(alphaSys.toUntyped)
-  val betta = Cluster(bettaSys.toUntyped)
-  val gamma = Cluster(gammaSys.toUntyped)
+  val as = alphaSys
+  val alpha = Cluster(as.toUntyped)
+
+  val bs = bettaSys
+  val betta = Cluster(bs.toUntyped)
+
+  val gs = gammaSys
+  val gamma = Cluster(gs.toUntyped)
 
   alpha.join(alpha.selfAddress)
   betta.join(alpha.selfAddress)
   gamma.join(alpha.selfAddress)
 
-  Helpers.waitForAllNodesUp(alphaSys.toUntyped, bettaSys.toUntyped, gammaSys.toUntyped)
+  Helpers.waitForAllNodesUp(as.toUntyped, bs.toUntyped, gs.toUntyped)
 
   /*
   alphaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
@@ -101,17 +164,38 @@ object Runner extends App {
   Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys2)*/
 
   Helpers.wait(10.second)
-  println("gamma patritioned")
+  println("★ ★ ★  gamma patritioned ★ ★ ★")
   //gamma.leave(gamma.selfAddress)
-  gammaSys.terminate
+  gs.terminate
+
+  /*Helpers.wait(20.second)
+  println("★ ★ ★  betta killed  ★ ★ ★")
+  betta.leave(betta.selfAddress)
+  bettaSys.terminate*/
+
+  Helpers.wait(20.second)
+  println("★ ★ ★  betta patritioned  ★ ★ ★")
+  //betta.leave(betta.selfAddress)
+  bs.terminate
+
+
+
+  Helpers.wait(15.second)
+
+  /*
+  val bs1 = bettaSys
+  val betta1 = Cluster(bs1.toUntyped)
+  betta1.join(alpha.selfAddress)
+  */
 
   Helpers.wait(20.second)
 
-  //println("betta patritioned")
-  betta.leave(alpha.selfAddress)
-  bettaSys.terminate
-
-  //Helpers.wait(30.second)
   alpha.leave(alpha.selfAddress)
-  alphaSys.terminate
+  as.terminate
+
+  /*
+  betta1.leave(betta1.selfAddress)
+  bs1.terminate
+  */
+
 }

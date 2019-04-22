@@ -34,9 +34,8 @@ val `akka-db` = project
 
       "ch.qos.logback" % "logback-classic" % "1.2.3",
 
-
       "com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
-
+      
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
       ("com.lihaoyi" % "ammonite" % "1.6.0" % "test").cross(CrossVersion.full),
 

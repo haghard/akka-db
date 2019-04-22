@@ -14,7 +14,7 @@ object KeepMajoritySbResolver {
   def props(autoDownTimeout: FiniteDuration): Props =
     Props(new KeepMajoritySbResolver(autoDownTimeout))
 
-  case class UnreachableTimeout(member: Member)
+  case class StableUnreachableTO(member: Member)
 
   case class UnreachableTimeoutLast2(member: Member)
 
@@ -39,8 +39,7 @@ class SplitBrainResolver(system: ActorSystem) extends DowningProvider {
   override def downingActorProps: Option[Props] =
     clusterSettings.AutoDownUnreachableAfter match {
       case d: FiniteDuration ⇒
-        import scala.concurrent.duration._
-        Some(KeepMajoritySbResolver.props(d /*.-(1000.millis)*/ ))
+        Some(KeepMajoritySbResolver.props(d))
       case _ ⇒
         throw new ConfigurationException(
           "KeepMajoritySbResolver downing provider selected but 'akka.cluster.auto-down-unreachable-after' not set"
@@ -164,10 +163,10 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
         timers.startSingleTimer(Key, KeepMajoritySbResolver.UnreachableTimeoutLast2(member), autoDownTimeout)
         log.warning("NP between last 2 nodes {}", member)
         context.become(resolveLastTwo)
-        // See if this member is in the majority of the members
+        // Check if this member is in the majority
       } else if (isMajority(state.members.size, state.unreachable.size)) {
         log.error("{} is in majority", cluster.selfAddress)
-        timers.startSingleTimer(Key, KeepMajoritySbResolver.UnreachableTimeout(member), autoDownTimeout)
+        timers.startSingleTimer(Key, KeepMajoritySbResolver.StableUnreachableTO(member), autoDownTimeout)
       } else {
         log.error("{} is in minority", cluster.selfAddress)
         timers.startSingleTimer(Key, KeepMajoritySbResolver.AttemptAutoDown(member), autoDownTimeout)
@@ -183,7 +182,7 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
       } else
         log.error("Force exit avoided because {} is reachable again", member)
 
-    case KeepMajoritySbResolver.UnreachableTimeout(member) ⇒
+    case KeepMajoritySbResolver.StableUnreachableTO(member) ⇒
       // Check if the member is still unreachable
       if (cluster.state.unreachable.nonEmpty) {
         if (cluster.state.unreachable.contains(member)) {
