@@ -9,17 +9,24 @@ import akka.cluster.typed.{ Cluster, SelfUp, Subscribe }
 import db.hashing
 
 import scala.collection.immutable.SortedSet
+import scala.concurrent.duration._
 
 object DbReplica {
 
   //val serviceKey = akka.actor.typed.receptionist.ServiceKey[WriteOp]("alarm")
+
+  case object Pulse extends ClusterDomainEvent
 
   def apply(RF: Int, WC: Int, id: Long): Behavior[ClusterDomainEvent] = {
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up Writer", id)
       val c = Cluster(ctx.system)
       c.subscriptions ! akka.cluster.typed.Subscribe(ctx.self, classOf[SelfUp])
-      join(c, SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], id)
+
+      Behaviors.withTimers[ClusterDomainEvent] { t ⇒
+        t.startPeriodicTimer(Pulse, Pulse, 2000.millis)
+        join(c, SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], id)
+      }
     }
   }
 
@@ -31,13 +38,15 @@ object DbReplica {
         //Behaviors.receiveMessagePartial { //receive { (ctx, msg) ⇒
         msg match {
           case SelfUp(state) ⇒
-            //ctx.asScala.system.settings.config.getStringList("akka.cluster.seed-nodes")
             val am = state.members.filter(_.status == MemberStatus.Up).map(_.address)
             am.foreach(address ⇒ hash.add(Replica(address)))
-            ctx.log.warning("{} joined ★ ★ ★  Ring:{}", id, hash.toString)
+            ctx.log.warning("{} ★ ★ ★  Ring:{}", id, hash.toString)
 
-            c.subscriptions ! Subscribe(ctx.self, classOf[ClusterDomainEvent]) //MemberEvent ClusterDomainEvent
+            c.subscriptions ! Subscribe(ctx.self, classOf[ClusterDomainEvent])
             convergence(am, removed, hash, id)
+          case Pulse ⇒
+            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            Behaviors.same
         }
     }
 
@@ -58,13 +67,16 @@ object DbReplica {
           case UnreachableMember(member) ⇒
             ctx.system.log.warning("{} Unreachable = {}", id, member.address)
             awaitForConvergence(available, removed, hash, id)
+          case Pulse ⇒
+            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            Behaviors.same
           case _ ⇒
             Behaviors.same
         }
     }
 
   def awaitForConvergence(
-    availableMembers: SortedSet[Address], removedMembers: SortedSet[Address],
+    available: SortedSet[Address], removed: SortedSet[Address],
     hash: hashing.Rendezvous[Replica], id: Long
   ): Behavior[ClusterDomainEvent] =
     Behaviors.receivePartial {
@@ -72,17 +84,20 @@ object DbReplica {
         msg match {
           case ReachableMember(member) ⇒
             //ctx.log.warning("{} Reachable = {}", id, member.address)
-            convergence(availableMembers, removedMembers, hash, id)
+            convergence(available, removed, hash, id)
           case UnreachableMember(member) ⇒
             //ctx.log.warning("{} Unreachable = {}", id, member.address)
-            awaitForConvergence(availableMembers, removedMembers, hash, id)
+            awaitForConvergence(available, removed, hash, id)
           case MemberRemoved(member, _) ⇒
-            val rm = removedMembers + member.address
-            val am = availableMembers - member.address
+            val rm = removed + member.address
+            val am = available - member.address
             /*ctx.log.warning(
             "{} replica {} was taken downed after being unreachable. Continue with unavailable replica:[{}]",
             id, member.address, rm.mkString(","))*/
             convergence(am, rm, hash, id)
+          case Pulse ⇒
+            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            Behaviors.same
           case _ ⇒
             Behaviors.same
         }

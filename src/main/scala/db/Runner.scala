@@ -1,7 +1,6 @@
 package db
 
-
-import akka.actor.typed.{ Behavior, DispatcherSelector, Terminated }
+import akka.actor.typed.{ DispatcherSelector, Terminated }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
@@ -48,22 +47,12 @@ object Runner extends App {
   def alphaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 0l), "alpha", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica(RF, CL, 0l), "alpha-replica", DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
-      ctx.spawn(
-        Behaviors.withTimers[Symbol] { ctx0 ⇒
-          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
-          Behaviors.receiveMessage {
-            case 'hb ⇒
-              ctx.log.info("{} hb", 0l)
-              Behaviors.same
-          }
-        }, "nb")
-
       Behaviors.receiveSignal {
-        case (ctx0, Terminated(`replica`)) ⇒
-          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
+        case (_, Terminated(`replica`)) ⇒
+          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
           Behaviors.stopped
       }
     },
@@ -72,22 +61,12 @@ object Runner extends App {
   def bettaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 1l), "betta", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica(RF, CL, 1l), "betta-replica", DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
-      ctx.spawn(
-        Behaviors.withTimers[Symbol] { ctx0 ⇒
-          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
-          Behaviors.receiveMessage {
-            case 'hb ⇒
-              ctx.log.info("{} hb", 1l)
-              Behaviors.same
-          }
-        }, "nb")
-
       Behaviors.receiveSignal {
-        case (ctx0, Terminated(`replica`)) ⇒
-          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
+        case (_, Terminated(`replica`)) ⇒
+          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
           Behaviors.stopped
       }
     },
@@ -96,30 +75,12 @@ object Runner extends App {
   def gammaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 2l), "gamma", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica(RF, CL, 2l), "gamma-replica", DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
-      val hb = ctx.spawn(
-        Behaviors.withTimers[Symbol] { ctx0 ⇒
-          ctx0.startPeriodicTimer("HB", 'hb, 500.millis)
-
-          def active(cd: Int): Behavior[Symbol] =
-            Behaviors.receiveMessage {
-              case 'hb ⇒
-                ctx.log.info("{} hb", 2l)
-                if (cd == 0)
-                  throw new Exception("Boooommm !!!!!")
-                active(cd - 1)
-            }
-
-          active(500)
-        }, "nb")
-
-      ctx.watch(hb)
-
       Behaviors.receiveSignal {
-        case (ctx0, Terminated(a /*`replica`*/ )) ⇒
-          ctx0.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected: {}", a)
+        case (_, Terminated(`replica`)) ⇒
+          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
           Behaviors.stopped
       }
     },
@@ -164,7 +125,7 @@ object Runner extends App {
   Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys2)*/
 
   Helpers.wait(10.second)
-  println("★ ★ ★  gamma patritioned ★ ★ ★")
+  println("★ ★ ★  gamma partitioned ★ ★ ★")
   //gamma.leave(gamma.selfAddress)
   gs.terminate
 
@@ -174,28 +135,22 @@ object Runner extends App {
   bettaSys.terminate*/
 
   Helpers.wait(20.second)
-  println("★ ★ ★  betta patritioned  ★ ★ ★")
+  println("★ ★ ★  betta partitioned  ★ ★ ★")
   //betta.leave(betta.selfAddress)
   bs.terminate
 
-
-
-  Helpers.wait(15.second)
-
-  /*
-  val bs1 = bettaSys
-  val betta1 = Cluster(bs1.toUntyped)
-  betta1.join(alpha.selfAddress)
-  */
-
-  Helpers.wait(20.second)
+  Helpers.wait(30.second)
 
   alpha.leave(alpha.selfAddress)
   as.terminate
 
-  /*
-  betta1.leave(betta1.selfAddress)
-  bs1.terminate
-  */
+  /*Helpers.wait(20.second)
+  println("★ ★ ★  alpha patritioned  ★ ★ ★")
+  as.terminate
+
+  Helpers.wait(20.second)
+
+  betta.leave(alpha.selfAddress)
+  bs.terminate*/
 
 }

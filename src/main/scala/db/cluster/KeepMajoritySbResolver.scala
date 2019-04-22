@@ -49,22 +49,19 @@ class SplitBrainResolver(system: ActorSystem) extends DowningProvider {
 
 /**
  *
- * The idea being here is that we want the first seed node to survive
- *
- *
  * Uses the criteria of the majority to autodown nodes avoiding network partition problems.
- * It checks if a node belongs to the majority of the cluster before letting it down an unreachable node.
+ * It checks if a node belongs to the majority of the cluster before letting down an unreachable node.
  * (http://stackoverflow.com/questions/30575174/how-to-configure-downing-in-akka-cluster-when-a-singleton-is-present)
- * The key being is the decision must be the same on both sides but opposite.
+ * The key behind any split brain resolver being is the decision must be the same on both sides but opposite.
  *
  * @autoDownTimeout - Time margin after which shards or singletons that belonged to a downed/removed
- *                  partition are created in surviving partition. The purpose of this margin is that
- *                  in case of a network partition the persistent actors in the non-surviving partitions
- *                  must be stopped before corresponding persistent actors are started somewhere else.
- *                  This is useful if you implement downing strategies that handle network partitions,
+ * partition are created in surviving partition. The purpose of this margin is that
+ * in case of a network partition the persistent actors in the non-surviving partitions
+ * must be stopped before corresponding persistent actors are started somewhere else.
+ * This is useful if you implement downing strategies that handle network partitions,
  * e.g. by keeping the larger side of the partition and shutting down the smaller side.
- *                  Decision is taken by the strategy when there has been no membership or
- *                  reachability changes for this duration, i.e. the cluster state is stable.
+ * Decision is taken by the strategy when there has been no membership or
+ * reachability changes for this duration, i.e. the cluster state is stable.
  *
  */
 class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with ActorLogging with Timers {
@@ -102,7 +99,7 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
 
 
     b) If only 2 node left A and B, and both aren't seed nodes and a network partition happens then the following scenarios are possible:
-      Let's assume A has a lowest address then B has
+      Let's assume A has the lowest address
       The key being is the decision must be the same on both sides but opposite: On A we bring down B, On B we kill self.
         Which means:
           If they both(A and B) are healthy and it's a pure np then: B kills itself, A stays. As a result you end up with one node cluster (A)

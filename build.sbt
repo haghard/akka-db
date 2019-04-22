@@ -26,7 +26,7 @@ val `akka-db` = project
       "com.typesafe.akka" %% "akka-http" % "10.1.7",
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
 
-      "com.github.TanUkkii007" %% "akka-cluster-custom-downing" % "0.0.12",
+      //"com.github.TanUkkii007" %% "akka-cluster-custom-downing" % "0.0.12",
 
       "com.github.mpilquist" %% "simulacrum" % "0.12.0",
 
