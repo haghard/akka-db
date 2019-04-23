@@ -15,17 +15,23 @@ import DB._
 import akka.actor.typed.receptionist.{ Receptionist, ServiceKey }
 import akka.pattern.pipe
 import db.Runner
-import db.core.KeyValueStorageBackend3.KVRequest3
+import db.core.KeyValueStorageBackend3.{ CPut3, PutFailure3, PutResponse3, PutSuccess3 }
 
 import scala.util.Try
 
-object KeyValueStorageBackend {
+object KeyValueStorageBackend3 {
 
-  val serviceKey = ServiceKey[KVRequest3]("db-ops")
+  sealed trait KVRequest3
+  case class CPut3(key: String, value: String, replyTo: akka.actor.typed.ActorRef[PutResponse3]) extends KVRequest3
 
-  def props() =
-    Props(new KeyValueStorageBackend)
-      .withDispatcher("akka.db-io")
+  sealed trait PutResponse3
+  case class PutSuccess3(key: String, replyTo: akka.actor.typed.ActorRef[PutResponse3]) extends PutResponse3
+  case class PutFailure3(key: String, th: Throwable, replyTo: akka.actor.typed.ActorRef[PutResponse3]) extends PutResponse3
+
+  val serviceKey = ServiceKey[KVProtocol]("db-ops")
+
+  def props(r: akka.actor.typed.ActorRef[Receptionist.Command]) =
+    Props(new KeyValueStorageBackend3(r)).withDispatcher("akka.db-io")
 }
 
 /*
@@ -50,8 +56,12 @@ https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/Optim
       to run into WRITE SKEW in this example because we should have at least two variables
 */
 
-class KeyValueStorageBackend extends Actor with ActorLogging {
+class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
+
+  import akka.actor.typed.scaladsl.adapter._
+
+  receptionist ! akka.actor.typed.receptionist.Receptionist.Register(KeyValueStorageBackend.serviceKey, self)
 
   val path = "rocks-db"
 
@@ -88,7 +98,7 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
     txnDb.close()
   }
 
-  def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
+  def put(key: String, value: String, replyTo: akka.actor.typed.ActorRef[PutResponse3]): PutResponse3 =
     txn.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       val kb = key.getBytes(UTF_8)
       val snapshot = txn.getSnapshot
@@ -104,9 +114,9 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
         } else throw db.core.txn.InvariantViolation(s"Key ${key} shouldn't go below 0")
       }
       Right(key)
-    }.fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
+    }.fold((PutFailure3(key, _, replyTo)), PutSuccess3(_, replyTo))
 
-  def get(key: String, replyTo: ActorRef): GetResponse = {
+  /*def get(key: String, replyTo: ActorRef): GetResponse = {
     txn.readTxn0(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
@@ -114,23 +124,22 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
       if (valueBts ne null) Right(Some(new String(valueBts)))
       else Right(None)
     }.fold((GetFailure(key, _, replyTo)), GetSuccess0(_, replyTo))
-  }
+  }*/
 
   def write: Receive = {
-    case CPut(key, value, node) ⇒
-      val replyTo = sender()
-      Future(put(key, value, node, replyTo)).mapTo[PutResponse].pipeTo(self)
-    case r: PutResponse ⇒
+    case CPut3(key, value, replyTo) ⇒
+      Future(put(key, value, replyTo)).mapTo[PutResponse3].pipeTo(self)
+    case r: PutResponse3 ⇒
       r match {
-        case s: PutSuccess ⇒
+        case s: PutSuccess3 ⇒
           s.replyTo ! s
-        case f: PutFailure ⇒
+        case f: PutFailure3 ⇒
           f.replyTo ! f
       }
   }
 
-  def read: Receive = {
-    case CGet(key) ⇒
+  /*def read: Receive = {
+    case CGet3(key) ⇒
       val replyTo = sender()
       Future(get(key, replyTo)).mapTo[GetResponse].pipeTo(self)
     case r: GetResponse ⇒
@@ -140,9 +149,9 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
         case f: GetFailure ⇒
           f.replyTo ! f
       }
-  }
+  }*/
 
-  override def receive: Receive = write orElse read orElse {
+  override def receive: Receive = write /*orElse read*/ orElse {
     case scala.util.Failure(ex) ⇒
       log.error(ex, "Unexpected error")
   }

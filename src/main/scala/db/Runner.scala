@@ -1,10 +1,11 @@
 package db
 
-import akka.actor.typed.{ ChildFailed, DispatcherSelector, PostStop, Terminated }
+import akka.actor.typed.{ChildFailed, DispatcherSelector, PostStop, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{ DbReplica2, KeyValueStorageBackend2 }
+import db.core.KeyValueStorageBackend3.KVRequest3
+import db.core.{DbReplica2, KeyValueStorageBackend3}
 
 import scala.concurrent.duration._
 
@@ -48,6 +49,9 @@ object Runner extends App {
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
       val replica = ctx.spawn(DbReplica2(RF, CL, 0l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+
+      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+
       ctx.watch(replica)
 
       Behaviors.receiveSignal {
@@ -69,6 +73,8 @@ object Runner extends App {
       val replica = ctx.spawn(DbReplica2(RF, CL, 1l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
+      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+
       Behaviors.receiveSignal {
         case (_, Terminated(`replica`)) ⇒
           ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
@@ -82,6 +88,8 @@ object Runner extends App {
     Behaviors.setup[Unit] { ctx ⇒
       val replica = ctx.spawn(DbReplica2(RF, CL, 2l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
+
+      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
 
       Behaviors.receiveSignal {
         case (_, Terminated(`replica`)) ⇒
@@ -148,7 +156,6 @@ object Runner extends App {
 
   alpha.leave(alpha.selfAddress)
   as.terminate
-
 
   /*Helpers.wait(20.second)
   println("★ ★ ★  alpha patritioned  ★ ★ ★")

@@ -1,3 +1,4 @@
+
 package db.core
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,9 +18,11 @@ import scala.concurrent.duration._
 
 object DB {
 
-  case class CPut(key: String, value: String, node: Node)
+  sealed trait KVProtocol
 
-  case class CGet(key: String)
+  case class CPut(key: String, value: String, node: Node) extends KVProtocol
+
+  case class CGet(key: String) extends KVProtocol
 
   sealed trait PutResponse
 

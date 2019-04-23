@@ -2,6 +2,8 @@ package db
 
 import akka.actor.Address
 import akka.actor.typed.ActorRef
+import db.core.DB.KVProtocol
+import db.core.KeyValueStorageBackend3.PutResponse3
 
 package object core {
 
@@ -14,16 +16,4 @@ package object core {
     override def toString: String =
       addr.host.flatMap(h ⇒ addr.port.map(p ⇒ s"{$h:${p}}")).getOrElse("")
   }
-
-  sealed trait DBOps
-
-  case object SelfUpDb extends DBOps
-
-  case class ReadDb(key: String) extends DBOps
-
-  case class ReplicasChanged(replicas: Set[ActorRef[DBOps]]) extends DBOps
-
-  case class WriteDb(key: String, value: String) extends DBOps
-
-  case object Pulse extends DBOps
 }
