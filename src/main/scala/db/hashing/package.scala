@@ -1,6 +1,7 @@
 package db
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.ConcurrentSkipListSet
 
@@ -42,7 +43,6 @@ package object hashing {
    *
    */
   @simulacrum.typeclass trait Rendezvous[ShardId] extends Hashing[ShardId] {
-    protected val Encoding = "UTF-8"
     override val seed = 512l
     override val name = "rendezvous-hashing"
     protected val members = new ConcurrentSkipListSet[ShardId]()
@@ -61,7 +61,7 @@ package object hashing {
       val iter = members.iterator
       while (iter.hasNext) {
         val shard = iter.next
-        val keyBytes = key.getBytes(Encoding)
+        val keyBytes = key.getBytes(StandardCharsets.UTF_8)
         val nodeBytes = toBinary(shard)
         val keyAndShard = ByteBuffer.allocate(keyBytes.length + nodeBytes.length).put(keyBytes).put(nodeBytes)
         val shardHash128bit = CassandraMurmurHash.hash3_x64_128(keyAndShard, 0, keyAndShard.array.length, seed)(1)
@@ -98,8 +98,6 @@ package object hashing {
     override val seed = 512l
     override val name = "consistent-hashing"
 
-    protected val Encoding = "UTF-8"
-
     private val ring: JSortedMap[Long, Shard] = new JTreeMap[Long, Shard]()
 
     private def writeInt(arr: Array[Byte], i: Int, offset: Int): Array[Byte] = {
@@ -132,20 +130,20 @@ package object hashing {
         }
       } else false
 
-    override def shardFor(key: String, RF: Int): Set[Shard] = {
-      if (RF > ring.keySet.size)
+    override def shardFor(key: String, rf: Int): Set[Shard] = {
+      if (rf > ring.keySet.size)
         throw new Exception("Replication factor more than the number of the ranges on a ring")
 
-      val keyBytes = key.getBytes(Encoding)
+      val keyBytes = key.getBytes(StandardCharsets.UTF_8)
       val keyHash = CassandraMurmurHash.hash3_x64_128(ByteBuffer.wrap(keyBytes), 0, keyBytes.length, seed)(1)
       if (ring.containsKey(keyHash)) {
-        ring.keySet.asScala.take(RF).map(ring.get).to[scala.collection.immutable.Set]
+        ring.keySet.asScala.take(rf).map(ring.get).to[scala.collection.immutable.Set]
       } else {
         val tail = ring.tailMap(keyHash)
-        val candidates = tail.keySet.asScala.take(RF).map(ring.get).to[scala.collection.immutable.Set]
+        val candidates = tail.keySet.asScala.take(rf).map(ring.get).to[scala.collection.immutable.Set]
         //println(s"got ${candidates.mkString(",")} till the end of range")
-        if (candidates.size < RF) {
-          val rest = RF - candidates.size
+        if (candidates.size < rf) {
+          val rest = rf - candidates.size
           //println(s"the end is reached. need ${rest} more")
           //we must be at the end of the ring so we go to the first entry and so on
           candidates ++ ring.keySet.asScala.take(rest).map(ring.get).to[scala.collection.immutable.Set]
@@ -166,30 +164,30 @@ package object hashing {
 
   object Consistent {
     implicit def instance0 = new Consistent[String] {
-      override def toBinary(node: String): Array[Byte] = node.getBytes(Encoding)
+      override def toBinary(node: String): Array[Byte] = node.getBytes(StandardCharsets.UTF_8)
       override def validated(node: String): Boolean = true
     }
     implicit def instance1 = new Consistent[core.Node] {
-      override def toBinary(node: core.Node): Array[Byte] = s"${node.host}:${node.port}".getBytes(Encoding)
+      override def toBinary(node: core.Node): Array[Byte] = s"${node.host}:${node.port}".getBytes(StandardCharsets.UTF_8)
       override def validated(node: core.Node): Boolean = true
     }
   }
 
   object Rendezvous {
     implicit def instance0 = new Rendezvous[String] {
-      override def toBinary(node: String): Array[Byte] = node.getBytes(Encoding)
+      override def toBinary(node: String): Array[Byte] = node.getBytes(StandardCharsets.UTF_8)
       override def validated(node: String): Boolean = true
     }
 
     implicit def instance1 = new Rendezvous[db.core.Node] {
       override def toBinary(node: core.Node): Array[Byte] =
-        s"${node.host}:${node.port}".getBytes(Encoding)
+        s"${node.host}:${node.port}".getBytes(StandardCharsets.UTF_8)
       override def validated(node: core.Node): Boolean = true
     }
 
     implicit def instance2 = new Rendezvous[db.core.Replica] {
       override def toBinary(node: core.Replica): Array[Byte] =
-        s"${node.addr.host}:${node.addr.port}".getBytes(Encoding)
+        s"${node.addr.host}:${node.addr.port}".getBytes(StandardCharsets.UTF_8)
       override def validated(shard: core.Replica): Boolean = true
     }
   }

@@ -1,10 +1,10 @@
 package db
 
-import akka.actor.typed.{ DispatcherSelector, Terminated }
+import akka.actor.typed.{ ChildFailed, DispatcherSelector, PostStop, Terminated }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{ DbReplica, KeyValueStorageBackend2 }
+import db.core.{ DbReplica2, KeyValueStorageBackend2 }
 
 import scala.concurrent.duration._
 
@@ -47,10 +47,15 @@ object Runner extends App {
   def alphaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 0l), "alpha-replica", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica2(RF, CL, 0l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
       Behaviors.receiveSignal {
+        case (_, PostStop) ⇒
+          Behaviors.same
+        case (_, ChildFailed((replica, cause))) ⇒
+          ctx.log.error(cause, "★ ★ ★ ★ ★ ★  Replica 0: ChildFailed {}", replica)
+          Behaviors.same
         case (_, Terminated(`replica`)) ⇒
           ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
           Behaviors.stopped
@@ -61,7 +66,7 @@ object Runner extends App {
   def bettaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 1l), "betta-replica", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica2(RF, CL, 1l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
       Behaviors.receiveSignal {
@@ -75,7 +80,7 @@ object Runner extends App {
   def gammaSys = akka.actor.typed.ActorSystem(
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica(RF, CL, 2l), "gamma-replica", DispatcherSelector.fromConfig("akka.db-io"))
+      val replica = ctx.spawn(DbReplica2(RF, CL, 2l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
       ctx.watch(replica)
 
       Behaviors.receiveSignal {
@@ -144,6 +149,7 @@ object Runner extends App {
   alpha.leave(alpha.selfAddress)
   as.terminate
 
+
   /*Helpers.wait(20.second)
   println("★ ★ ★  alpha patritioned  ★ ★ ★")
   as.terminate
@@ -152,5 +158,4 @@ object Runner extends App {
 
   betta.leave(alpha.selfAddress)
   bs.terminate*/
-
 }

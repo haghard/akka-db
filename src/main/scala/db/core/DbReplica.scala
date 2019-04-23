@@ -1,7 +1,10 @@
+
 package db.core
 
 import akka.actor.Address
-import akka.actor.typed.Behavior
+import akka.actor.typed.{ ActorRef, Behavior }
+import akka.actor.typed.receptionist.Receptionist.{ Listing, Register }
+import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.ClusterEvent._
 import akka.cluster.MemberStatus
@@ -13,9 +16,7 @@ import scala.concurrent.duration._
 
 object DbReplica {
 
-  //val serviceKey = akka.actor.typed.receptionist.ServiceKey[WriteOp]("alarm")
-
-  case object Pulse extends ClusterDomainEvent
+  case object ClusterPulse extends ClusterDomainEvent
 
   def apply(RF: Int, WC: Int, id: Long): Behavior[ClusterDomainEvent] = {
     Behaviors.setup { ctx ⇒
@@ -24,7 +25,7 @@ object DbReplica {
       c.subscriptions ! akka.cluster.typed.Subscribe(ctx.self, classOf[SelfUp])
 
       Behaviors.withTimers[ClusterDomainEvent] { t ⇒
-        t.startPeriodicTimer(Pulse, Pulse, 2000.millis)
+        t.startPeriodicTimer(ClusterPulse, ClusterPulse, 2000.millis)
         join(c, SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], id)
       }
     }
@@ -35,7 +36,6 @@ object DbReplica {
     hash: hashing.Rendezvous[Replica], id: Long): Behavior[ClusterDomainEvent] =
     Behaviors.receivePartial {
       case (ctx, msg) ⇒
-        //Behaviors.receiveMessagePartial { //receive { (ctx, msg) ⇒
         msg match {
           case SelfUp(state) ⇒
             val am = state.members.filter(_.status == MemberStatus.Up).map(_.address)
@@ -44,8 +44,10 @@ object DbReplica {
 
             c.subscriptions ! Subscribe(ctx.self, classOf[ClusterDomainEvent])
             convergence(am, removed, hash, id)
-          case Pulse ⇒
+          case ClusterPulse ⇒
             ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            Behaviors.same
+          case _ ⇒
             Behaviors.same
         }
     }
@@ -67,7 +69,7 @@ object DbReplica {
           case UnreachableMember(member) ⇒
             ctx.system.log.warning("{} Unreachable = {}", id, member.address)
             awaitForConvergence(available, removed, hash, id)
-          case Pulse ⇒
+          case ClusterPulse ⇒
             ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
           case _ ⇒
@@ -95,7 +97,7 @@ object DbReplica {
             "{} replica {} was taken downed after being unreachable. Continue with unavailable replica:[{}]",
             id, member.address, rm.mkString(","))*/
             convergence(am, rm, hash, id)
-          case Pulse ⇒
+          case ClusterPulse ⇒
             ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
           case _ ⇒
