@@ -93,6 +93,10 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
       val kb = key.getBytes(UTF_8)
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
+      /*
+        Guarding against Read-Write Conflicts:
+          txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
+       */
       val prevValue = txn.getForUpdate(readOptions, kb, true)
       if (prevValue eq null)
         txn.put(kb, Runner.ticketNmr.toString.getBytes(UTF_8))

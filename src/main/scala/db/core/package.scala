@@ -1,9 +1,6 @@
 package db
 
 import akka.actor.Address
-import akka.actor.typed.ActorRef
-import db.core.DB.KVProtocol
-import db.core.KeyValueStorageBackend3.PutResponse3
 
 package object core {
 

@@ -100,7 +100,10 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
 
-      //val readOptions = new ReadOptions()
+      /*
+        Guarding against Read-Write Conflicts:
+          txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
+       */
       val prevRegBts = txn.getForUpdate(readOptions, kb, true)
       val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
 
@@ -133,7 +136,6 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
 
       val snapshot = txn.getSnapshot
       val readOptions = new ReadOptions().setSnapshot(snapshot)
-      //val readOptions = new ReadOptions()
 
       val regBts = txn.get(readOptions, kb)
       //val vtBts = txn.get(readOptions, kb0)

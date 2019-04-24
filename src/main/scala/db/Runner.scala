@@ -1,11 +1,10 @@
 package db
 
-import akka.actor.typed.{ChildFailed, DispatcherSelector, PostStop, Terminated}
+import akka.actor.typed.{ ChildFailed, DispatcherSelector, PostStop, Terminated }
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.KeyValueStorageBackend3.KVRequest3
-import db.core.{DbReplica2, KeyValueStorageBackend3}
+import db.core.{ DbReplica2, KeyValueStorageBackend3 }
 
 import scala.concurrent.duration._
 

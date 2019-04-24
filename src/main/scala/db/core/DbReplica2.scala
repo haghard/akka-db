@@ -14,7 +14,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.duration._
 import scala.util.{ Failure, Success, Try }
 import akka.actor.typed.scaladsl.AskPattern._
-import db.core.KeyValueStorageBackend3.{ CPut3, KVRequest3, PutResponse3 }
+import db.core.KeyValueStorageBackend3.{ CPut3, KVRequest3, KVResponse3 }
 
 object DbReplica2 {
 
@@ -58,7 +58,7 @@ object DbReplica2 {
 
         implicit val sch = ctx.system.scheduler
         implicit val ec = ctx.system.executionContext
-        implicit val to: Timeout = Timeout(2.seconds)
+        implicit val writeTo: Timeout = Timeout(2.seconds)
 
         running(ctx, Rendezvous[Replica],
                 TreeMap.empty[Address, ActorRef[KVRequest3]](Address.addressOrdering), c.selfMember.address, id)
@@ -87,20 +87,22 @@ object DbReplica2 {
 
         running(ctx, h, replicas, selfAddr, id)
       case WritePulse ⇒
-        val key = keys(ThreadLocalRandom.current.nextInt(keys.size))
+        val key = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
         val replicas = Try(h.shardFor(key, 2)).getOrElse(Set.empty)
         val reachable = replicas.map(r ⇒ av.get(r.addr)).flatten
-        ctx.log.info("{} goes to:[{}]   alive:[{}]", key, replicas.mkString(","), reachable)
+        ctx.log.info("{} goes to:[{}]  alive:[{}]", key, replicas.mkString(","), reachable)
 
         Future.traverse(reachable.toVector) { dbRef ⇒
-          dbRef.ask[PutResponse3](CPut3(key, System.nanoTime.toString, _))
+          dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
         }.onComplete {
           case Success(_) ⇒
-            ctx.scheduleOnce(200.millis, ctx.self, WritePulse)
+            ctx.self ! WritePulse
+          //ctx.scheduleOnce(10.millis, ctx.self, WritePulse)
+          case Failure(db.core.txn.InvariantViolation(_)) ⇒
+            ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
           case Failure(ex) ⇒
             ctx.log.error(ex, "Write error:")
-            //ctx.log.info(s"res: ${res}  ${id}")
-            ctx.scheduleOnce(200.millis, ctx.self, WritePulse)
+            ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
         }
 
         Behaviors.same

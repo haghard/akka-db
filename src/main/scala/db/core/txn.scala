@@ -43,7 +43,8 @@ object txn {
         logger.error("transactGet error: " + ex.getMessage)
         txn.rollback()
         Left(ex)
-    } finally txn.close()
+    } finally
+      txn.close()
 
   def readTxn0[T <: Transaction](txn: T, logger: LoggingAdapter)(f: T ⇒ Either[Throwable, Option[String]]): Either[Throwable, Option[String]] =
     try {

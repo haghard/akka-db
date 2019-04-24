@@ -30,3 +30,11 @@ https://doc.akka.io/docs/akka/current/typed/routers.html
 https://doc.akka.io/docs/akka/current/typed/distributed-data.html
 https://github.com/johanandren/akka-typed-samples.git
 https://github.com/hseeberger/whirlwind-tour-akka.git
+
+
+#RocksDB
+https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/TransactionSample.java
+https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/OptimisticTransactionSample.java
+https://github.com/facebook/rocksdb/wiki/Transactions
+https://github.com/facebook/rocksdb/wiki/Merge-Operator
+https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
