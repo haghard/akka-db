@@ -38,3 +38,5 @@ https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/Optim
 https://github.com/facebook/rocksdb/wiki/Transactions
 https://github.com/facebook/rocksdb/wiki/Merge-Operator
 https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
+
+https://github.com/lmdbjava/lmdbjava

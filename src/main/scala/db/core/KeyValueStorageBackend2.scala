@@ -32,10 +32,6 @@ object KeyValueStorageBackend2 {
 }
 
 /*
-
-https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/TransactionSample.java
-https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/OptimisticTransactionSample.java
-
     SNAPSHOT ISOLATION
     https://jepsen.io/consistency/models/snapshot-isolation
 

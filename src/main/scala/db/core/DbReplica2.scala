@@ -26,7 +26,7 @@ object DbReplica2 {
 
   case object SelfUpDb extends DbReplicaOps
 
-  case class ReplicasChanged(replicas: Set[ActorRef[KVRequest3]]) extends DbReplicaOps
+  case class MembershipChanged(replicas: Set[ActorRef[KVRequest3]]) extends DbReplicaOps
 
   case object WritePulse extends DbReplicaOps
 
@@ -50,7 +50,7 @@ object DbReplica2 {
         KeyValueStorageBackend.serviceKey,
         ctx.messageAdapter[akka.actor.typed.receptionist.Receptionist.Listing] {
           case KeyValueStorageBackend.serviceKey.Listing(replicas) ⇒
-            ReplicasChanged(replicas)
+            MembershipChanged(replicas)
         })
 
       Behaviors.withTimers[DbReplicaOps] { timers ⇒
@@ -68,7 +68,7 @@ object DbReplica2 {
   def running(ctx: ActorContext[DbReplicaOps], h: Rendezvous[Replica], av: SortedMap[Address, ActorRef[KVRequest3]],
     selfAddr: Address, id: Long)(implicit sch: Scheduler, ec: ExecutionContext, to: Timeout): Behavior[DbReplicaOps] =
     Behaviors.receiveMessage {
-      case ReplicasChanged(rs) ⇒
+      case MembershipChanged(rs) ⇒
         // Need to understand if there are new members to ship the ring
         ctx.log.warning("★ ★ ★ {} Cluster changed:{}", id, rs.mkString(","))
 

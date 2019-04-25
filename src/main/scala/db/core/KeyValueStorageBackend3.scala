@@ -2,20 +2,20 @@ package db.core
 
 import java.io.File
 
-import akka.actor.{ Actor, ActorLogging, Props }
+import akka.actor.{Actor, ActorLogging, Props}
 import akka.cluster.Cluster
 import org.rocksdb.Options
 import org.rocksdb._
 import org.rocksdb.util.SizeUnit
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.{ Files, Paths }
+import java.nio.file.{Files, Paths}
 
 import scala.concurrent.Future
 import DB._
-import akka.actor.typed.receptionist.{ Receptionist, ServiceKey }
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
-import db.core.KeyValueStorageBackend3.{ CPut3, KVResponse3, PutFailure3, PutSuccess3 }
+import db.core.KeyValueStorageBackend3.{CPut3, KVResponse3, PutFailure3, PutSuccess3}
 
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -33,7 +33,12 @@ object KeyValueStorageBackend3 {
 
   case class PutFailure3(key: String, th: Throwable, replyTo: akka.actor.typed.ActorRef[KVResponse3]) extends KVResponse3
 
-  val serviceKey = ServiceKey[KVProtocol]("db-ops")
+  val sbKey = ServiceKey[KVProtocol]("StorageBackend")
+
+  val sep = ','
+  val path = "rocks-db"
+  val ticketsNum = 200
+
 
   def managedIter(r: RocksIterator, log: LoggingAdapter)(f: RocksIterator ⇒ Unit) =
     try f(r)
@@ -41,9 +46,6 @@ object KeyValueStorageBackend3 {
       case NonFatal(ex) ⇒ log.error(ex, "RocksIterator error:")
     } finally r.close
 
-  val path = "rocks-db"
-  val sep = ','
-  val ticketsNum = 200
 
   def props(r: akka.actor.typed.ActorRef[Receptionist.Command]) =
     Props(new KeyValueStorageBackend3(r)).withDispatcher("akka.db-io")
@@ -113,7 +115,6 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
       iter.seekToFirst
       while (iter.isValid) {
         val key = new String(iter.key, UTF_8)
-
         val sales = new String(iter.value, UTF_8).split(sep)
         log.info("{} [{}:{}]", cluster.selfAddress.port.get, key, sales.size)
         iter.next
@@ -136,14 +137,10 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
        */
 
       val snapshot = txn.getSnapshot
-      val readOptions = new ReadOptions().setSnapshot(snapshot)
-      val salesBts = txn.getForUpdate(readOptions, kb, true)
-
+      val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), kb, true)
       val sales = Try(new String(salesBts, UTF_8).split(sep)).getOrElse(Array.empty[String])
-
-      if (sales.size < ticketsNum) {
-        txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
-      } else throw db.core.txn.InvariantViolation(s"Key ${key}. All tickets have been sold")
+      if (sales.size < ticketsNum) txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
+      else throw db.core.txn.InvariantViolation(s"Key ${key}. All tickets have been sold")
       Right(key)
     }.fold((PutFailure3(key, _, replyTo)), PutSuccess3(_, replyTo))
 
