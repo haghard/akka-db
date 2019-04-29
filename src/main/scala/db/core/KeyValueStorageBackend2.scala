@@ -100,6 +100,8 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
         Guarding against Read-Write Conflicts:
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
        */
+
+      //TODO:  txn.multiGet(readOptions, Array(kb, kb0))
       val prevRegBts = txn.getForUpdate(readOptions, kb, true)
       val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
 

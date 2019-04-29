@@ -2,20 +2,20 @@ package db.core
 
 import java.io.File
 
-import akka.actor.{Actor, ActorLogging, Props}
+import akka.actor.{ Actor, ActorLogging, Props }
 import akka.cluster.Cluster
 import org.rocksdb.Options
 import org.rocksdb._
 import org.rocksdb.util.SizeUnit
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.{Files, Paths}
+import java.nio.file.{ Files, Paths }
 
 import scala.concurrent.Future
 import DB._
-import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.receptionist.{ Receptionist, ServiceKey }
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
-import db.core.KeyValueStorageBackend3.{CPut3, KVResponse3, PutFailure3, PutSuccess3}
+import db.core.KeyValueStorageBackend3.{ CPut3, KVResponse3, PutFailure3, PutSuccess3 }
 
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -39,13 +39,11 @@ object KeyValueStorageBackend3 {
   val path = "rocks-db"
   val ticketsNum = 200
 
-
   def managedIter(r: RocksIterator, log: LoggingAdapter)(f: RocksIterator ⇒ Unit) =
     try f(r)
     catch {
       case NonFatal(ex) ⇒ log.error(ex, "RocksIterator error:")
     } finally r.close
-
 
   def props(r: akka.actor.typed.ActorRef[Receptionist.Command]) =
     Props(new KeyValueStorageBackend3(r)).withDispatcher("akka.db-io")

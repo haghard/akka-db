@@ -11,17 +11,6 @@ package object ds {
 
   case class MerkleNodeId(id: Int) extends AnyVal
 
-  sealed trait MerkleTree {
-    def nodeId: MerkleNodeId
-
-    def digest: Digest
-  }
-
-  case class MerkleHashNode(nodeId: MerkleNodeId, digest: Digest, left: MerkleTree, right: MerkleTree) extends MerkleTree
-  case class MerkleLeaf(nodeId: MerkleNodeId, digest: Digest) extends MerkleTree
-
-
-
   trait MerkleDigest[T] {
     def digest(t: T): Digest
   }

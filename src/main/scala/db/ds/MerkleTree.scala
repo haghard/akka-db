@@ -3,7 +3,6 @@ package db.ds
 import scala.annotation.tailrec
 import scala.util.Try
 
-
 sealed trait TempMerkleTree {
   def digest: Digest
 }
@@ -11,6 +10,14 @@ sealed trait TempMerkleTree {
 case class TempMerkleHashNode(digest: Digest, left: TempMerkleTree, right: TempMerkleTree) extends TempMerkleTree
 
 case class TempMerkleLeaf(digest: Digest) extends TempMerkleTree
+
+sealed trait MerkleTree {
+  def nodeId: MerkleNodeId
+
+  def digest: Digest
+}
+case class MerkleHashNode(nodeId: MerkleNodeId, digest: Digest, left: MerkleTree, right: MerkleTree) extends MerkleTree
+case class MerkleLeaf(nodeId: MerkleNodeId, digest: Digest) extends MerkleTree
 
 object MerkleTree {
 
@@ -28,7 +35,7 @@ object MerkleTree {
 
       while (trees.length > 1) {
         trees = trees.grouped(2)
-          .map(x => mergeTrees(x(0), x(1)))
+          .map(x ⇒ mergeTrees(x(0), x(1)))
           .toSeq
       }
       trees.head
@@ -46,9 +53,9 @@ object MerkleTree {
       def toMerkle(mt: TempMerkleTree): MerkleTree = {
         counter += 1
         mt match {
-          case TempMerkleHashNode(digest, left, right) =>
+          case TempMerkleHashNode(digest, left, right) ⇒
             MerkleHashNode(MerkleNodeId(counter), digest, toMerkle(left), toMerkle(right))
-          case TempMerkleLeaf(digest) =>
+          case TempMerkleLeaf(digest) ⇒
             MerkleLeaf(MerkleNodeId(counter), digest)
         }
       }
@@ -75,10 +82,10 @@ object MerkleTree {
   @tailrec
   def findNode(nodeId: MerkleNodeId, merkleTree: MerkleTree): Option[MerkleTree] = {
     merkleTree match {
-      case _ if merkleTree.nodeId == nodeId => Option(merkleTree)
-      case MerkleHashNode(nId, _, _, right) if nodeId.id >= right.nodeId.id => findNode(nodeId, right)
-      case MerkleHashNode(nId, _, left, _) => findNode(nodeId, left)
-      case _ => None
+      case _ if merkleTree.nodeId == nodeId ⇒ Option(merkleTree)
+      case MerkleHashNode(nId, _, _, right) if nodeId.id >= right.nodeId.id ⇒ findNode(nodeId, right)
+      case MerkleHashNode(nId, _, left, _) ⇒ findNode(nodeId, left)
+      case _ ⇒ None
     }
   }
 }
@@ -103,4 +110,4 @@ it should "have the same top hash" in {
 
     digest1.hash.deep shouldBe digest2.hash.deep
   } F
- */
+ */ 
