@@ -13,11 +13,11 @@ object txn {
     //concurrent modification
     case ex: RocksDBException ⇒
       logger.error(s"RocksDBTransact error: ${ex.getStatus.getCode.name}")
-      txn.rollback()
+      txn.rollback
       Left(new Exception(s"RocksDBTransact error: ${ex.getStatus.getCode.name}"))
     case NonFatal(ex) ⇒
       logger.error(s"Transact error: ${ex.getMessage}")
-      txn.rollback()
+      txn.rollback
       Left(ex)
   }
 
@@ -28,7 +28,7 @@ object txn {
       txn.commit()
       r
     } catch onError
-    finally txn.close()
+    finally txn.close
 
   def writeTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(f: T ⇒ Either[Throwable, String]): Either[Throwable, String] =
     managedR[T](txn, logger)(f)(txnErrorHandler(txn, logger))
@@ -36,15 +36,15 @@ object txn {
   def readTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(f: T ⇒ Either[Throwable, Option[Set[String]]]): Either[Throwable, Option[Set[String]]] =
     try {
       val r = f(txn)
-      txn.commit()
+      txn.commit
       r
     } catch {
       case NonFatal(ex) ⇒
         logger.error("transactGet error: " + ex.getMessage)
-        txn.rollback()
+        txn.rollback
         Left(ex)
     } finally
-      txn.close()
+      txn.close
 
   def readTxn0[T <: Transaction](txn: T, logger: LoggingAdapter)(f: T ⇒ Either[Throwable, Option[String]]): Either[Throwable, Option[String]] =
     try {
@@ -54,7 +54,7 @@ object txn {
     } catch {
       case NonFatal(ex) ⇒
         logger.error("transactGet error: " + ex.getMessage)
-        txn.rollback()
+        txn.rollback
         Left(ex)
-    } finally txn.close()
+    } finally txn.close
 }

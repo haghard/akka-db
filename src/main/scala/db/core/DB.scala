@@ -132,7 +132,7 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
     case WriteDataTick ⇒
       //startWith
       val key = keys(i.toInt % keys.size)
-      val replicas: Set[Replica] = Try(hash.shardFor(key.toString, rf)).getOrElse(Set.empty)
+      val replicas: Set[Replica] = Try(hash.memberFor(key.toString, rf)).getOrElse(Set.empty)
 
       val availableRep = replicas.filter(r ⇒ !removedMembers.exists(_ == r.addr))
 

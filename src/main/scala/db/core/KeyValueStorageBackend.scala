@@ -12,7 +12,7 @@ import java.nio.file.{ Files, Paths }
 
 import scala.concurrent.Future
 import DB._
-import akka.actor.typed.receptionist.{ Receptionist, ServiceKey }
+import akka.actor.typed.receptionist.ServiceKey
 import akka.pattern.pipe
 import db.Runner
 import db.core.KeyValueStorageBackend3.KVRequest3
@@ -35,7 +35,7 @@ object KeyValueStorageBackend {
     https://jepsen.io/consistency/models/snapshot-isolation
 
       When a txn starts, it sees a consistent snapshot of the db that existed at the moment that the txn started.
-      If two txns update the same object, then first writer wins.
+      If two txns update the same object, then first writer wins and second fails
       We get SI automatically for free with MVCC
 
      Main benefits of MVCC
@@ -81,7 +81,7 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
 
   override def postStop(): Unit = {
     log.warning("Stop db node {}", dbPath)
-    txnDb.close()
+    txnDb.close
   }
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =

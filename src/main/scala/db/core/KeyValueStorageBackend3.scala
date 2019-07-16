@@ -57,7 +57,7 @@ https://github.com/facebook/rocksdb/wiki/Transactions
 https://github.com/facebook/rocksdb/wiki/Merge-Operator
 https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
 
-    This example: Sell N tickets concurrency
+    This example: Sell N tickets concurrency problem
 
     SNAPSHOT ISOLATION (Can't be totally available)
     https://jepsen.io/consistency/models/snapshot-isolation
@@ -137,6 +137,8 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
       val snapshot = txn.getSnapshot
       val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), kb, true)
       val sales = Try(new String(salesBts, UTF_8).split(sep)).getOrElse(Array.empty[String])
+
+      //use merge to activate org.rocksdb.StringAppendOperator
       if (sales.size < ticketsNum) txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
       else throw db.core.txn.InvariantViolation(s"Key ${key}. All tickets have been sold")
       Right(key)

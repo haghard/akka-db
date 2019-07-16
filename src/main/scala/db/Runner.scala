@@ -7,6 +7,7 @@ import com.typesafe.config.ConfigFactory
 import db.core.{ DbReplica2, KeyValueStorageBackend3 }
 
 import scala.concurrent.duration._
+import akka.actor.typed.scaladsl.adapter._
 
 //runMain db.Runner
 object Runner extends App {
@@ -42,9 +43,7 @@ object Runner extends App {
   val CL = 3
   val ticketNmr = 500000
 
-  import akka.actor.typed.scaladsl.adapter._
-
-  def alphaSys = akka.actor.typed.ActorSystem(
+  def alphaSys = akka.actor.typed.ActorSystem[Nothing](
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
       val replica = ctx.spawn(DbReplica2(RF, CL, 0l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
@@ -63,10 +62,10 @@ object Runner extends App {
           ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
           Behaviors.stopped
       }
-    },
+    }.narrow,
     systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
 
-  def bettaSys = akka.actor.typed.ActorSystem(
+  def bettaSys = akka.actor.typed.ActorSystem[Nothing](
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
       val replica = ctx.spawn(DbReplica2(RF, CL, 1l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
@@ -79,10 +78,10 @@ object Runner extends App {
           ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
           Behaviors.stopped
       }
-    },
+    }.narrow,
     systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
 
-  def gammaSys = akka.actor.typed.ActorSystem(
+  def gammaSys = akka.actor.typed.ActorSystem[Nothing](
     //guardian
     Behaviors.setup[Unit] { ctx ⇒
       val replica = ctx.spawn(DbReplica2(RF, CL, 2l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
@@ -95,7 +94,7 @@ object Runner extends App {
           ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
           Behaviors.stopped
       }
-    },
+    }.narrow,
     systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
 
   val as = alphaSys

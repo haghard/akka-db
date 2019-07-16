@@ -3,7 +3,7 @@ import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
 import scalariform.formatter.preferences._
 
-val akkaVersion = "2.5.22"
+val akkaVersion = "2.5.23"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 
@@ -23,7 +23,7 @@ val `akka-db` = project
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-http" % "10.1.7",
+      "com.typesafe.akka" %% "akka-http" % "10.1.8",
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
 
       //"com.github.TanUkkii007" %% "akka-cluster-custom-downing" % "0.0.12",
@@ -32,12 +32,15 @@ val `akka-db` = project
 
       "org.rocksdb" % "rocksdbjni" % "5.17.2",
 
+      //https://github.com/wjglerum/IoT-collector.git
+      //"io.waylay.influxdb" %% "influxdb-scala" % "2.0.1",
+
       "ch.qos.logback" % "logback-classic" % "1.2.3",
 
       "com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
       
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
-      ("com.lihaoyi" % "ammonite" % "1.6.0" % "test").cross(CrossVersion.full),
+      ("com.lihaoyi" % "ammonite" % "1.6.9" % "test").cross(CrossVersion.full),
 
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion),
 

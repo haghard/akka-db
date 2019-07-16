@@ -101,9 +101,12 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
        */
 
-      //TODO:  txn.multiGet(readOptions, Array(kb, kb0))
-      val prevRegBts = txn.getForUpdate(readOptions, kb, true)
-      val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
+      val arrays = txn.multiGetForUpdate(readOptions, Array(kb, kb0))
+      val prevRegBts = arrays(0)
+      val prevVtBts = arrays(1)
+
+      //val prevRegBts = txn.getForUpdate(readOptions, kb, true)
+      //val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
 
       if (prevRegBts eq null) {
         val vt = com.rbmhtechnology.eventuate.VectorTime.Zero.increment(node.port.toString)

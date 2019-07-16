@@ -88,9 +88,9 @@ object DbReplica2 {
         running(ctx, h, replicas, selfAddr, id)
       case WritePulse ⇒
         val key = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
-        val replicas = Try(h.shardFor(key, 2)).getOrElse(Set.empty)
+        val replicas = Try(h.memberFor(key, 2)).getOrElse(Set.empty)
         val reachable = replicas.map(r ⇒ av.get(r.addr)).flatten
-        ctx.log.info("{} goes to:[{}]  alive:[{}]", key, replicas.mkString(","), reachable)
+        ctx.log.info("{} goes to:[{}] alive:[{}]", key, replicas.mkString(","), reachable)
 
         Future.traverse(reachable.toVector) { dbRef ⇒
           dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))

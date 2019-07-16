@@ -69,6 +69,12 @@ object DbReplica {
           case UnreachableMember(member) ⇒
             ctx.system.log.warning("{} Unreachable = {}", id, member.address)
             awaitForConvergence(available, removed, hash, id)
+          case MemberExited(member) ⇒ //graceful exit
+            val rm = removed + member.address
+            val am = available - member.address
+            hash.remove(Replica(member.address))
+            ctx.log.warning("{} replica {} exit gracefully", id, member.address)
+            convergence(am, rm, hash, id)
           case ClusterPulse ⇒
             ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
