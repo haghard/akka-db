@@ -8,7 +8,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.typed.{Cluster, SelfUp, Unsubscribe}
 import akka.util.Timeout
-import db.core.KeyValueStorageBackend3.{Protocol, ReservationReply, ReserveSeat}
+import db.core.MVCCStorageBackend.{ReservationReply, ReserveSeat}
 import db.hashing.Rendezvous
 
 import scala.collection.immutable.{SortedMap, TreeMap}
@@ -22,15 +22,15 @@ object HashRing {
 
   val voucherKeys = Vector("alpha", "betta", "gamma", "delta")
 
-  sealed trait DbReplicaOps
+  sealed trait Protocol
 
-  case object SelfUpDb extends DbReplicaOps
+  case object SelfUpDb extends Protocol
 
-  case class MembershipChanged(replicas: Set[ActorRef[Protocol]]) extends DbReplicaOps
+  final case class MembershipChanged(replicas: Set[ActorRef[MVCCStorageBackend.Protocol]]) extends Protocol
 
-  case object WritePulse extends DbReplicaOps
+  case object Write extends Protocol
 
-  def apply(rf: Int, replicaId: Long): Behavior[DbReplicaOps] =
+  def apply(rf: Int, replicaId: Long): Behavior[Protocol] =
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up replica", replicaId)
       val c = Cluster(ctx.system)
@@ -41,7 +41,7 @@ object HashRing {
       selfUp(c, replicaId, rf)
     }
 
-  def selfUp(c: Cluster, replicaId: Long, rf: Int): Behavior[DbReplicaOps] =
+  def selfUp(c: Cluster, replicaId: Long, rf: Int): Behavior[Protocol] =
     Behaviors.receive { (ctx, _) ⇒
       c.subscriptions ! Unsubscribe(ctx.self)
 
@@ -53,12 +53,12 @@ object HashRing {
         }
       )
 
-      Behaviors.withTimers[DbReplicaOps] { timers ⇒
-        timers.startSingleTimer(WritePulse, WritePulse, 3000.millis)
+      Behaviors.withTimers[Protocol] { timers ⇒
+        timers.startSingleTimer(Write, Write, 3000.millis)
 
         running(
           Rendezvous[Replica],
-          TreeMap.empty[Address, ActorRef[Protocol]](Address.addressOrdering),
+          TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]](Address.addressOrdering),
           c.selfMember.address,
           replicaId,
           rf
@@ -68,24 +68,22 @@ object HashRing {
 
   def running(
     hash: Rendezvous[Replica],
-    storages: SortedMap[Address, ActorRef[Protocol]],
+    storages: SortedMap[Address, ActorRef[MVCCStorageBackend.Protocol]],
     selfAddr: Address,
     id: Long,
     replicaId: Int
-  )(implicit ctx: ActorContext[DbReplicaOps], to: Timeout): Behavior[DbReplicaOps] =
+  )(implicit ctx: ActorContext[Protocol], to: Timeout): Behavior[Protocol] =
     Behaviors.receiveMessagePartial {
       case MembershipChanged(rs) ⇒
         //TODO: handle it properly. You need to reconstruct the whole ring for the ground up
-
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
 
         //idempotent add
-        rs.foreach { r ⇒
-          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr))
-          else hash.add(Replica(r.path.address))
-        }
+        rs.foreach(r ⇒
+          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address))
+        )
 
-        val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[Protocol]]) { (acc, ref) ⇒
+        val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
           if (ref.path.address.host.isEmpty)
             acc + (selfAddr → ref)
           else
@@ -93,7 +91,7 @@ object HashRing {
         }
         running(hash, replicas, selfAddr, id, replicaId)
 
-      case WritePulse ⇒
+      case Write ⇒
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
@@ -116,14 +114,14 @@ object HashRing {
           //TODO: If N concurrent clients hit the same key at the same time, different winners are possible.
           .onComplete {
             case Success(_) ⇒
-              ctx.self ! WritePulse
+              ctx.self ! Write
             //ctx.scheduleOnce(10.millis, ctx.self, WritePulse)
             case Failure(db.core.txn.InvariantViolation(msg)) ⇒
               ctx.log.error(s"InvariantViolation: $msg")
-              ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
+              ctx.scheduleOnce(100.millis, ctx.self, Write)
             case Failure(ex) ⇒
               ctx.log.error("Write error:", ex)
-              ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
+              ctx.scheduleOnce(100.millis, ctx.self, Write)
           }
         Behaviors.same
     }

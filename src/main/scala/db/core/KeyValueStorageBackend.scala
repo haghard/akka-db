@@ -15,7 +15,7 @@ import DB._
 import akka.actor.typed.receptionist.ServiceKey
 import akka.pattern.pipe
 import db.Runner
-import db.core.KeyValueStorageBackend3.Protocol
+import db.core.MVCCStorageBackend.Protocol
 
 import scala.util.Try
 

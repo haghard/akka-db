@@ -4,7 +4,7 @@ import akka.actor.typed.{ActorSystem, ChildFailed, DispatcherSelector, PostStop,
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{HashRing, KeyValueStorageBackend3}
+import db.core.{HashRing, MVCCStorageBackend}
 
 import scala.concurrent.duration._
 import akka.actor.typed.scaladsl.adapter._
@@ -41,7 +41,7 @@ object Runner extends App {
       Behaviors
         .setup[Unit] { ctx ⇒
           val replica = ctx.spawn(HashRing(RF, 0L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
-          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+          ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
           ctx.watch(replica)
 
           Behaviors.receiveSignal {
@@ -68,7 +68,7 @@ object Runner extends App {
           val replica = ctx.spawn(HashRing(RF, 1L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
-          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+          ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
           Behaviors.receiveSignal {
             case (_, Terminated(`replica`)) ⇒
@@ -89,7 +89,7 @@ object Runner extends App {
           val replica = ctx.spawn(HashRing(RF, 2L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
-          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+          ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
           Behaviors.receiveSignal {
             case (_, Terminated(`replica`)) ⇒

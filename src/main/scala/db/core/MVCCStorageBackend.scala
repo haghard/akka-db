@@ -12,7 +12,7 @@ import akka.cluster.Cluster
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
 import db.core.DB._
-import db.core.KeyValueStorageBackend3.{ReservationReply, ReserveSeat, _}
+import db.core.MVCCStorageBackend.{ReservationReply, ReserveSeat, _}
 import org.rocksdb.{Options, _}
 import org.rocksdb.util.SizeUnit
 
@@ -20,7 +20,7 @@ import scala.concurrent.Future
 import scala.util.Try
 import scala.util.control.NonFatal
 
-object KeyValueStorageBackend3 {
+object MVCCStorageBackend {
 
   sealed trait Protocol
 
@@ -51,7 +51,7 @@ object KeyValueStorageBackend3 {
     } finally r.close
 
   def props(receptionist: ActorRef[Receptionist.Command]) =
-    Props(new KeyValueStorageBackend3(receptionist)).withDispatcher("akka.db-io")
+    Props(new MVCCStorageBackend(receptionist)).withDispatcher("akka.db-io")
 }
 
 /*
@@ -80,7 +80,7 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
  */
 
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
-class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptionist.Command])
+class MVCCStorageBackend(receptionist: akka.actor.typed.ActorRef[Receptionist.Command])
     extends Actor
     with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
@@ -113,7 +113,7 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
 
   override def preStart(): Unit = {
     log.info("dbPath:{}", dbPath)
-    KeyValueStorageBackend3.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
+    MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
       iter.seekToFirst
       while (iter.isValid) {
         val key   = new String(iter.key, UTF_8)
