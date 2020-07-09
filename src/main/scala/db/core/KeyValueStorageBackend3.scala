@@ -1,39 +1,42 @@
 package db.core
 
 import java.io.File
-
-import akka.actor.{Actor, ActorLogging, Props}
-import akka.cluster.Cluster
-import org.rocksdb.Options
-import org.rocksdb._
-import org.rocksdb.util.SizeUnit
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Paths}
 
-import scala.concurrent.Future
-import DB._
+import akka.actor.typed.ActorRef
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.actor.typed.scaladsl.adapter._
+import akka.actor.{Actor, ActorLogging, Props}
+import akka.cluster.Cluster
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
-import db.core.KeyValueStorageBackend3.{BuySeat, BuySeatResult, PutFailure3, PutSuccess3}
+import db.core.DB._
+import db.core.KeyValueStorageBackend3.{ReservationReply, ReserveSeat, _}
+import org.rocksdb.{Options, _}
+import org.rocksdb.util.SizeUnit
 
+import scala.concurrent.Future
 import scala.util.Try
 import scala.util.control.NonFatal
-import KeyValueStorageBackend3._
-import akka.actor.typed.scaladsl.adapter._
 
 object KeyValueStorageBackend3 {
 
-  sealed trait KVRequest3
+  sealed trait Protocol
 
-  case class BuySeat(key: String, value: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]) extends KVRequest3
+  final case class ReserveSeat(voucher: String, client: String, replyTo: ActorRef[ReservationReply]) extends Protocol
 
-  sealed trait BuySeatResult
+  sealed trait ReservationReply {
+    def key: String
+  }
 
-  case class PutSuccess3(key: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]) extends BuySeatResult
+  object ReservationReply {
 
-  case class PutFailure3(key: String, th: Throwable, replyTo: akka.actor.typed.ActorRef[BuySeatResult])
-      extends BuySeatResult
+    final case class Success(key: String, replyTo: ActorRef[ReservationReply]) extends ReservationReply
+
+    final case class Failure(key: String, th: Throwable, replyTo: ActorRef[ReservationReply]) extends ReservationReply
+
+  }
 
   val sbKey = ServiceKey[KVProtocol]("StorageBackend")
 
@@ -47,8 +50,8 @@ object KeyValueStorageBackend3 {
       case NonFatal(ex) ⇒ log.error(ex, "RocksIterator error:")
     } finally r.close
 
-  def props(r: akka.actor.typed.ActorRef[Receptionist.Command]) =
-    Props(new KeyValueStorageBackend3(r)).withDispatcher("akka.db-io")
+  def props(receptionist: ActorRef[Receptionist.Command]) =
+    Props(new KeyValueStorageBackend3(receptionist)).withDispatcher("akka.db-io")
 }
 
 /*
@@ -126,9 +129,9 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
     txnDb.close()
   }
 
-  def put(key: String, value: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]): BuySeatResult =
+  def put(key: String, value: String, replyTo: akka.actor.typed.ActorRef[ReservationReply]): ReservationReply =
     txn
-      .writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+      .mvccWrite(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         val kb = key.getBytes(UTF_8)
 
         /*
@@ -145,17 +148,17 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
         else throw db.core.txn.InvariantViolation(s"Key $key. All tickets have been sold")
         Right(key)
       }
-      .fold(PutFailure3(key, _, replyTo), PutSuccess3(_, replyTo))
+      .fold(ReservationReply.Failure(key, _, replyTo), ReservationReply.Success(_, replyTo))
 
   def write: Receive = {
-    case BuySeat(key, value, replyTo) ⇒
-      Future(put(key, value, replyTo)).mapTo[BuySeatResult].pipeTo(self)
-    case r: BuySeatResult ⇒
+    case ReserveSeat(key, value, replyTo) ⇒
+      Future(put(key, value, replyTo)).mapTo[ReservationReply].pipeTo(self)
+    case r: ReservationReply ⇒
       r match {
-        case s: PutSuccess3 ⇒
-          s.replyTo ! s
-        case f: PutFailure3 ⇒
-          f.replyTo ! f
+        case reply: ReservationReply.Success ⇒
+          reply.replyTo.tell(reply)
+        case reply: ReservationReply.Failure ⇒
+          reply.replyTo ! reply
       }
   }
 

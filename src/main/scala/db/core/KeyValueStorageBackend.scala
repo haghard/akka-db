@@ -15,13 +15,13 @@ import DB._
 import akka.actor.typed.receptionist.ServiceKey
 import akka.pattern.pipe
 import db.Runner
-import db.core.KeyValueStorageBackend3.KVRequest3
+import db.core.KeyValueStorageBackend3.Protocol
 
 import scala.util.Try
 
 object KeyValueStorageBackend {
 
-  val serviceKey = ServiceKey[KVRequest3]("db-ops")
+  val serviceKey = ServiceKey[Protocol]("db-ops")
 
   def props() =
     Props(new KeyValueStorageBackend)
@@ -84,7 +84,7 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
     txn
-      .writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+      .mvccWrite(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         val kb          = key.getBytes(UTF_8)
         val snapshot    = txn.getSnapshot
         val readOptions = new ReadOptions().setSnapshot(snapshot)

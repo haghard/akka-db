@@ -33,7 +33,6 @@ object Runner extends App {
     ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
 
   val RF        = 3
-  val CL        = 2
   val ticketNmr = 500000
 
   def alphaSys: ActorSystem[Nothing] =
@@ -41,7 +40,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, CL, 0L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 0L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
           ctx.watch(replica)
 
@@ -66,7 +65,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, CL, 1L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 1L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
@@ -87,7 +86,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, CL, 2L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 2L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")

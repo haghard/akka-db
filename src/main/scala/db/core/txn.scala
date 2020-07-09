@@ -7,37 +7,58 @@ import scala.util.control.{NoStackTrace, NonFatal}
 
 object txn {
 
-  case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
+  final case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
 
-  private def txnErrorHandler(
-    txn: Transaction,
-    logger: LoggingAdapter
-  ): PartialFunction[Throwable, Either[Throwable, String]] = {
-    //concurrent modification
-    case ex: RocksDBException ⇒
-      logger.error(s"RocksDBTransact error: ${ex.getStatus.getCode.name}")
-      txn.rollback
-      Left(new Exception(s"RocksDBTransact error: ${ex.getStatus.getCode.name}"))
-    case NonFatal(ex) ⇒
-      logger.error(s"Transact error: ${ex.getMessage}")
-      txn.rollback
-      Left(ex)
-  }
-
-  private def write[T <: Transaction](txn: T)(
+  def mvccWrite[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Either[Throwable, String]
-  )(onError: PartialFunction[Throwable, Either[Throwable, String]]): Either[Throwable, String] =
+  ): Either[Throwable, String] = {
+
+    def txnErrorHandler(
+      txn: Transaction,
+      logger: LoggingAdapter
+    ): PartialFunction[Throwable, Either[Throwable, String]] = {
+      //concurrent modification
+      case ex: RocksDBException ⇒
+        val errName = ex.getStatus.getCode.name
+        logger.error(s"Transaction error: $errName", ex)
+        txn.rollback
+        Left(new Exception(s"Transaction error: $errName"))
+      case NonFatal(ex) ⇒
+        logger.error(s"Transaction error", ex)
+        txn.rollback
+        Left(ex)
+    }
+
+    def write[T <: Transaction](txn: T)(
+      f: T ⇒ Either[Throwable, String]
+    )(onError: PartialFunction[Throwable, Either[Throwable, String]]): Either[Throwable, String] =
+      try {
+        val r = f(txn)
+        txn.commit()
+        r
+      } catch onError
+      finally txn.close
+
+    //write[T](txn)(f)(txnErrorHandler(txn, logger))
+
     try {
       val r = f(txn)
       txn.commit()
       r
-    } catch onError
-    finally txn.close
+    } catch {
+      //concurrent modification
+      case ex: RocksDBException ⇒
+        val errName = ex.getStatus.getCode.name
+        logger.error(s"Transaction error: $errName", ex)
+        txn.rollback
+        Left(new Exception(s"Transaction error: $errName"))
+      case NonFatal(ex) ⇒
+        logger.error(s"Transaction error", ex)
+        txn.rollback
+        Left(ex)
+    } finally txn.close
 
-  def writeTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
-    f: T ⇒ Either[Throwable, String]
-  ): Either[Throwable, String] =
-    write[T](txn)(f)(txnErrorHandler(txn, logger))
+  }
 
   def readTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Either[Throwable, Option[Set[String]]]
@@ -48,7 +69,7 @@ object txn {
       r
     } catch {
       case NonFatal(ex) ⇒
-        logger.error("transactGet error: " + ex.getMessage)
+        logger.error("Transaction [Read] error", ex)
         txn.rollback
         Left(ex)
     } finally txn.close
@@ -62,7 +83,7 @@ object txn {
       r
     } catch {
       case NonFatal(ex) ⇒
-        logger.error("transactGet error: " + ex.getMessage)
+        logger.error("Transaction [Read] error", ex)
         txn.rollback
         Left(ex)
     } finally txn.close
