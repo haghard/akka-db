@@ -2,13 +2,13 @@ package db.core
 
 import java.io.File
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
 import org.rocksdb.Options
 import org.rocksdb._
 import org.rocksdb.util.SizeUnit
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.{ Files, Paths }
+import java.nio.file.{Files, Paths}
 
 import scala.concurrent.Future
 import DB._
@@ -39,12 +39,12 @@ object KeyValueStorageBackend {
       We get SI automatically for free with MVCC
 
      Main benefits of MVCC
-      * Writers don't block readers
-      * Read-only txns can read a shapshot without acquiring a lock.
+ * Writers don't block readers
+ * Read-only txns can read a shapshot without acquiring a lock.
 
      Allows WRITE SKEW anomaly in general. However, it's impossible
       to run into WRITE SKEW in this example because we should have at least two variables
-*/
+ */
 
 class KeyValueStorageBackend extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
@@ -54,12 +54,11 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
   Try(Files.createDirectory(Paths.get(s"./$path")))
 
   val cluster = Cluster(context.system)
-  val sa = cluster.selfAddress
+  val sa      = cluster.selfAddress
 
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
 
-  val dbPath = new File(s"./$path/replica-${cluster.selfAddress.port.get}")
-    .getAbsolutePath
+  val dbPath = new File(s"./$path/replica-${cluster.selfAddress.port.get}").getAbsolutePath
 
   val options = new Options()
     .setCreateIfMissing(true)
@@ -75,9 +74,8 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
   val txnDb: TransactionDB =
     TransactionDB.open(options, txnDbOptions, dbPath)
 
-  override def preStart(): Unit = {
+  override def preStart(): Unit =
     log.info("dbPath:{}", dbPath)
-  }
 
   override def postStop(): Unit = {
     log.warning("Stop db node {}", dbPath)
@@ -85,36 +83,39 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
   }
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
-    txn.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
-      val kb = key.getBytes(UTF_8)
-      val snapshot = txn.getSnapshot
-      val readOptions = new ReadOptions().setSnapshot(snapshot)
-      /*
+    txn
+      .writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+        val kb          = key.getBytes(UTF_8)
+        val snapshot    = txn.getSnapshot
+        val readOptions = new ReadOptions().setSnapshot(snapshot)
+        /*
         Guarding against Read-Write Conflicts:
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
-       */
-      val prevValue = txn.getForUpdate(readOptions, kb, true)
-      if (prevValue eq null)
-        txn.put(kb, Runner.ticketNmr.toString.getBytes(UTF_8))
-      else {
-        val prevCounter = new String(prevValue).toInt
-        if (prevCounter > 0) {
-          val newCounter = (prevCounter - 1).toString
-          txn.put(kb, newCounter.getBytes(UTF_8))
-        } else throw db.core.txn.InvariantViolation(s"Key ${key} shouldn't go below 0")
+         */
+        val prevValue = txn.getForUpdate(readOptions, kb, true)
+        if (prevValue eq null)
+          txn.put(kb, Runner.ticketNmr.toString.getBytes(UTF_8))
+        else {
+          val prevCounter = new String(prevValue).toInt
+          if (prevCounter > 0) {
+            val newCounter = (prevCounter - 1).toString
+            txn.put(kb, newCounter.getBytes(UTF_8))
+          } else throw db.core.txn.InvariantViolation(s"Key ${key} shouldn't go below 0")
+        }
+        Right(key)
       }
-      Right(key)
-    }.fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
+      .fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
 
-  def get(key: String, replyTo: ActorRef): GetResponse = {
-    txn.readTxn0(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
-      val snapshot = txn.getSnapshot
-      val readOptions = new ReadOptions().setSnapshot(snapshot)
-      val valueBts = txn.get(readOptions, key.getBytes(UTF_8))
-      if (valueBts ne null) Right(Some(new String(valueBts)))
-      else Right(None)
-    }.fold((GetFailure(key, _, replyTo)), GetSuccess0(_, replyTo))
-  }
+  def get(key: String, replyTo: ActorRef): GetResponse =
+    txn
+      .readTxn0(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+        val snapshot    = txn.getSnapshot
+        val readOptions = new ReadOptions().setSnapshot(snapshot)
+        val valueBts    = txn.get(readOptions, key.getBytes(UTF_8))
+        if (valueBts ne null) Right(Some(new String(valueBts)))
+        else Right(None)
+      }
+      .fold((GetFailure(key, _, replyTo)), GetSuccess0(_, replyTo))
 
   def write: Receive = {
     case CPut(key, value, node) ⇒
@@ -142,8 +143,9 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
       }
   }
 
-  override def receive: Receive = write orElse read orElse {
-    case scala.util.Failure(ex) ⇒
-      log.error(ex, "Unexpected error")
-  }
+  override def receive: Receive =
+    write orElse read orElse {
+      case scala.util.Failure(ex) ⇒
+        log.error(ex, "Unexpected error")
+    }
 }

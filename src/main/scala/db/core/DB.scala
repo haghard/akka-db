@@ -1,16 +1,15 @@
-
 package db.core
 
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor._
-import akka.cluster.{ Cluster, MemberStatus }
+import akka.cluster.{Cluster, MemberStatus}
 import akka.cluster.ClusterEvent._
-import db.{ Runner, hashing }
+import db.{hashing, Runner}
 
 import scala.collection.immutable.SortedSet
 import scala.concurrent.Future
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 import DB._
 import akka.pattern.ask
 
@@ -48,8 +47,11 @@ object DB {
     Props(new DB(cluster, startWith, RF, WC)).withDispatcher("akka.db-io")
 }
 
-class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor with ActorLogging
-  with akka.actor.Timers with Stash {
+class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int)
+    extends Actor
+    with ActorLogging
+    with akka.actor.Timers
+    with Stash {
 
   val addr = cluster.selfAddress
 
@@ -57,12 +59,11 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
 
   val keys = Vector("a", "b", "c" /*, "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n"*/ )
 
-  implicit val ec = context.dispatcher
+  implicit val ec           = context.dispatcher
   implicit val writeTimeout = akka.util.Timeout(1000.millis)
 
-  override def postStop(): Unit = {
+  override def postStop(): Unit =
     cluster.unsubscribe(self)
-  }
 
   override def preStart = {
     cluster.subscribe(self, classOf[ClusterDomainEvent])
@@ -70,8 +71,12 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
     timers.startSingleTimer(WriteDataTick, WriteDataTick, 2.seconds)
   }
 
-  def awaitForConvergence(availableMembers: SortedSet[Address], removedMembers: SortedSet[Address],
-    hash: hashing.Rendezvous[Replica], i: Long): Receive = {
+  def awaitForConvergence(
+    availableMembers: SortedSet[Address],
+    removedMembers: SortedSet[Address],
+    hash: hashing.Rendezvous[Replica],
+    i: Long
+  ): Receive = {
 
     case ReachableMember(member) ⇒
       log.info("ReachableMember = {}", member.address)
@@ -110,10 +115,15 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
         writeEventually(ref, key, value)
     }
 
-  def active(availableMembers: SortedSet[Address], removedMembers: SortedSet[Address], hash: hashing.Rendezvous[Replica], i: Long): Receive = {
+  def active(
+    availableMembers: SortedSet[Address],
+    removedMembers: SortedSet[Address],
+    hash: hashing.Rendezvous[Replica],
+    i: Long
+  ): Receive = {
     case MemberUp(member) ⇒
       hash.add(Replica(member.address))
-      val av = availableMembers + member.address
+      val av  = availableMembers + member.address
       val unv = removedMembers - member.address
       log.info("MemberUp = {} av:[{}] unv:[{}]", member.address, av.mkString("-"), unv.mkString("-"))
       context become active(av, unv, hash, i)
@@ -131,8 +141,8 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
 
     case WriteDataTick ⇒
       //startWith
-      val key = keys(i.toInt % keys.size)
-      val replicas: Set[Replica] = Try(hash.memberFor(key.toString, rf)).getOrElse(Set.empty)
+      val key                    = keys(i.toInt % keys.size)
+      val replicas: Set[Replica] = Try(hash.memberFor(key, rf)).getOrElse(Set.empty)
 
       val availableRep = replicas.filter(r ⇒ !removedMembers.exists(_ == r.addr))
 
@@ -141,42 +151,48 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int) extends Actor 
 
       val unAvailableReplicas = replicas.filter(r ⇒ removedMembers.exists(_ == r.addr))
 
-      log.info("key {} -> [{}] av:[{}]", key.toString, replicas.map(_.addr.port).mkString(";"),
-                                         availableRep.map(_.addr.port).mkString(";"))
+      log.info(
+        "key {} -> [{}] av:[{}]",
+        key,
+        replicas.map(_.addr.port).mkString(";"),
+        availableRep.map(_.addr.port).mkString(";")
+      )
 
       //WriteConsistency check
       if (availableRefs.size >= writeC) {
         if (unAvailableReplicas.nonEmpty)
-          log.error("{} store hint for:[{}]", key.toString, unAvailableReplicas.map(_.addr).mkString(","))
+          log.error("{} store hint for:[{}]", key, unAvailableReplicas.map(_.addr).mkString(","))
 
-        Future.traverse(availableRefs.toVector) { ref ⇒
-          val value = i.toString
-          writeEventually(ref, key, value).flatMap { k ⇒
-            (ref ask CGet(k)).mapTo[GetResponse].map {
-              case GetSuccess(v, _) ⇒
-                v.filter(_.contains(value)).isDefined
-              //v.getOrElse(Set.empty[String]).size == 1
-              case GetSuccess0(v, _)   ⇒ v
-              case GetFailure(_, _, _) ⇒ None
+        Future
+          .traverse(availableRefs.toVector) { ref ⇒
+            val value = i.toString
+            writeEventually(ref, key, value).flatMap { k ⇒
+              (ref ask CGet(k)).mapTo[GetResponse].map {
+                case GetSuccess(v, _) ⇒
+                  v.filter(_.contains(value)).isDefined
+                //v.getOrElse(Set.empty[String]).size == 1
+                case GetSuccess0(v, _)   ⇒ v
+                case GetFailure(_, _, _) ⇒ None
+              }
             }
           }
-        }.onComplete {
-          case Success(rs) ⇒
-            if (sellCounter.getAndDecrement >= 0) {
-              //rs.filter(_ == false).foreach { _ ⇒
-              log.info("{} [{}]", key, rs.mkString(","))
-              //}
-              context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
-              //self ! WriteDataTick
-            }
-          case Failure(ex) ⇒
-        }
+          .onComplete {
+            case Success(rs) ⇒
+              if (sellCounter.getAndDecrement >= 0) {
+                //rs.filter(_ == false).foreach { _ ⇒
+                log.info("{} [{}]", key, rs.mkString(","))
+                //}
+                context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
+                //self ! WriteDataTick
+              }
+            case Failure(ex) ⇒
+          }
       } else {
         context.system.scheduler.scheduleOnce(200.millis)(self ! WriteDataTick)
         log.error(s"Couldn't meet cl:{} for write {}", writeC, key)
       }
 
-      context become active(availableMembers, removedMembers, hash, i + 1l)
+      context become active(availableMembers, removedMembers, hash, i + 1L)
   }
 
   override def receive =

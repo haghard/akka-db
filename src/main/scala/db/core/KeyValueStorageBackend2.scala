@@ -1,20 +1,22 @@
+/*
+
 package db.core
 
 import java.io.File
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.{ Files, Paths }
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicReference
 
-import akka.actor.{ Actor, ActorLogging, ActorRef, Props }
+import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.cluster.Cluster
-import db.core.DB.{ CGet, CPut, GetFailure, GetResponse, GetSuccess, PutFailure, PutResponse, PutSuccess }
-import org.rocksdb.{ CompactionStyle, CompressionType, Options, ReadOptions, TransactionDB, TransactionDBOptions, TransactionOptions, WriteOptions }
+import db.core.DB.{CGet, CPut, GetFailure, GetResponse, GetSuccess, PutFailure, PutResponse, PutSuccess}
+import org.rocksdb.{CompactionStyle, CompressionType, Options, ReadOptions, TransactionDB, TransactionDBOptions, TransactionOptions, WriteOptions}
 import org.rocksdb.util.SizeUnit
 
 import scala.concurrent.Future
 import scala.util.Try
 import akka.pattern.pipe
-import akka.serialization.{ SerializationExtension, Serializer }
+import akka.serialization.{SerializationExtension, Serializer}
 import com.rbmhtechnology.eventuate.VectorTime
 import KeyValueStorageBackend2._
 
@@ -24,11 +26,12 @@ object KeyValueStorageBackend2 {
 
   val keyPostfix = ".vt"
 
-  val vtClazz = classOf[com.rbmhtechnology.eventuate.VectorTime]
+  val vtClazz  = classOf[com.rbmhtechnology.eventuate.VectorTime]
   val regClazz = classOf[com.rbmhtechnology.eventuate.crdt.MVRegister[String]]
 
-  def props = Props(new KeyValueStorageBackend2)
-    .withDispatcher("akka.db-io")
+  def props =
+    Props(new KeyValueStorageBackend2)
+      .withDispatcher("akka.db-io")
 }
 
 /*
@@ -40,11 +43,11 @@ object KeyValueStorageBackend2 {
       We get SI automatically for free with MVCC
 
      Main benefits of MVCC
-      * Writers don't block readers
-      * Read-only txns can read a shapshot without acquiring a lock.
+ * Writers don't block readers
+ * Read-only txns can read a shapshot without acquiring a lock.
 
      Allows WRITE SKEW
-*/
+ */
 
 class KeyValueStorageBackend2 extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
@@ -52,12 +55,11 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
   Try(Files.createDirectory(Paths.get(s"./$path")))
 
   val cluster = Cluster(context.system)
-  val sa = cluster.selfAddress
+  val sa      = cluster.selfAddress
 
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
 
-  val dbPath = new File(s"./$path/replica-${cluster.selfAddress.port.get}")
-    .getAbsolutePath
+  val dbPath = new File(s"./$path/replica-${cluster.selfAddress.port.get}").getAbsolutePath
 
   val options = new Options()
     .setCreateIfMissing(true)
@@ -73,13 +75,12 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
   val txnDb: TransactionDB =
     TransactionDB.open(options, txnDbOptions, dbPath)
 
-  val ser = SerializationExtension(context.system)
-  val vtSerRef = new AtomicReference[Serializer](ser.serializerFor(vtClazz))
+  val ser       = SerializationExtension(context.system)
+  val vtSerRef  = new AtomicReference[Serializer](ser.serializerFor(vtClazz))
   val regSerRef = new AtomicReference[Serializer](ser.serializerFor(regClazz))
 
-  override def preStart(): Unit = {
+  override def preStart(): Unit =
     log.info("db path:{}", dbPath)
-  }
 
   override def postStop(): Unit = {
     log.warning("Stop db on {}", dbPath)
@@ -87,70 +88,75 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
   }
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
-    txn.writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
-      val vtSer = vtSerRef.get
-      val regSer = regSerRef.get
+    txn
+      .writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+        val vtSer  = vtSerRef.get
+        val regSer = regSerRef.get
 
-      val kb = key.getBytes(UTF_8)
-      val kb0 = (key + keyPostfix).getBytes(UTF_8)
-      val snapshot = txn.getSnapshot
-      val readOptions = new ReadOptions().setSnapshot(snapshot)
+        val kb          = key.getBytes(UTF_8)
+        val kb0         = (key + keyPostfix).getBytes(UTF_8)
+        val snapshot    = txn.getSnapshot
+        val readOptions = new ReadOptions().setSnapshot(snapshot)
 
-      /*
+        /*
         Guarding against Read-Write Conflicts:
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
-       */
+ */
 
-      val arrays = txn.multiGetForUpdate(readOptions, Array(kb, kb0))
-      val prevRegBts = arrays(0)
-      val prevVtBts = arrays(1)
+        val arrays     = txn.multiGetForUpdate(readOptions, Array(kb, kb0))
+        val prevRegBts = arrays(0)
+        val prevVtBts  = arrays(1)
 
-      //val prevRegBts = txn.getForUpdate(readOptions, kb, true)
-      //val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
+        //val prevRegBts = txn.getForUpdate(readOptions, kb, true)
+        //val prevVtBts = txn.getForUpdate(readOptions, kb0, true)
 
-      if (prevRegBts eq null) {
-        val vt = com.rbmhtechnology.eventuate.VectorTime.Zero.increment(node.port.toString)
-        val reg = com.rbmhtechnology.eventuate.crdt.MVRegister[String]().assign(value, vt)
-        txn.put(kb, regSer.toBinary(reg))
-        txn.put(kb0, vtSer.toBinary(vt))
-      } else {
-        val prevVt = regSer.fromBinary(prevVtBts, Some(vtClazz)).asInstanceOf[VectorTime]
-        val prevReg = regSer.fromBinary(prevRegBts, Some(regClazz))
-          .asInstanceOf[com.rbmhtechnology.eventuate.crdt.MVRegister[String]]
+        if (prevRegBts eq null) {
+          val vt  = com.rbmhtechnology.eventuate.VectorTime.Zero.increment(node.port.toString)
+          val reg = com.rbmhtechnology.eventuate.crdt.MVRegister[String]().assign(value, vt)
+          txn.put(kb, regSer.toBinary(reg))
+          txn.put(kb0, vtSer.toBinary(vt))
+        } else {
+          val prevVt = regSer.fromBinary(prevVtBts, Some(vtClazz)).asInstanceOf[VectorTime]
+          val prevReg = regSer
+            .fromBinary(prevRegBts, Some(regClazz))
+            .asInstanceOf[com.rbmhtechnology.eventuate.crdt.MVRegister[String]]
 
-        val vt = prevVt.increment(node.port.toString)
-        val updatedReg = prevReg.assign(value, vt)
+          val vt         = prevVt.increment(node.port.toString)
+          val updatedReg = prevReg.assign(value, vt)
 
-        txn.put(kb, regSer.toBinary(updatedReg))
-        txn.put(kb0, vtSer.toBinary(vt))
+          txn.put(kb, regSer.toBinary(updatedReg))
+          txn.put(kb0, vtSer.toBinary(vt))
+        }
+        Right(key)
       }
-      Right(key)
-    }.fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
+      .fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
 
-  def get(key: String, replyTo: ActorRef): GetResponse = {
-    txn.readTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
-      //val vtSer = vtSerRef.get
-      val regSer = regSerRef.get
+  def get(key: String, replyTo: ActorRef): GetResponse =
+    txn
+      .readTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+        //val vtSer = vtSerRef.get
+        val regSer = regSerRef.get
 
-      val kb = key.getBytes(UTF_8)
-      //val kb0 = (key + postfix).getBytes(UTF_8)
+        val kb = key.getBytes(UTF_8)
+        //val kb0 = (key + postfix).getBytes(UTF_8)
 
-      val snapshot = txn.getSnapshot
-      val readOptions = new ReadOptions().setSnapshot(snapshot)
+        val snapshot    = txn.getSnapshot
+        val readOptions = new ReadOptions().setSnapshot(snapshot)
 
-      val regBts = txn.get(readOptions, kb)
-      //val vtBts = txn.get(readOptions, kb0)
+        val regBts = txn.get(readOptions, kb)
+        //val vtBts = txn.get(readOptions, kb0)
 
-      if (regBts ne null) {
-        //val vt = vtSer.fromBinary(vtBts, Some(vtClazz)).asInstanceOf[VectorTime]
-        val reg = regSer.fromBinary(regBts, Some(regClazz))
-          .asInstanceOf[com.rbmhtechnology.eventuate.crdt.MVRegister[String]]
+        if (regBts ne null) {
+          //val vt = vtSer.fromBinary(vtBts, Some(vtClazz)).asInstanceOf[VectorTime]
+          val reg = regSer
+            .fromBinary(regBts, Some(regClazz))
+            .asInstanceOf[com.rbmhtechnology.eventuate.crdt.MVRegister[String]]
 
-        Right(Some(reg.value))
-        //Right(Some(reg.value.mkString(",") + ": [" + vt.value.mkString(",") + "]"))
-      } else Right(None)
-    }.fold((GetFailure(key, _, replyTo)), GetSuccess(_, replyTo))
-  }
+          Right(Some(reg.value))
+          //Right(Some(reg.value.mkString(",") + ": [" + vt.value.mkString(",") + "]"))
+        } else Right(None)
+      }
+      .fold((GetFailure(key, _, replyTo)), GetSuccess(_, replyTo))
 
   def write: Receive = {
     case CPut(key, value, node) ⇒
@@ -178,8 +184,10 @@ class KeyValueStorageBackend2 extends Actor with ActorLogging {
       }
   }
 
-  override def receive: Receive = write orElse read orElse {
-    case scala.util.Failure(ex) ⇒
-      log.error(ex, "Unexpected error")
-  }
+  override def receive: Receive =
+    write orElse read orElse {
+      case scala.util.Failure(ex) ⇒
+        log.error(ex, "Unexpected error")
+    }
 }
+ */

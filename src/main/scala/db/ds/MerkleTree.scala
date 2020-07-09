@@ -17,7 +17,7 @@ sealed trait MerkleTree {
   def digest: Digest
 }
 case class MerkleHashNode(nodeId: MerkleNodeId, digest: Digest, left: MerkleTree, right: MerkleTree) extends MerkleTree
-case class MerkleLeaf(nodeId: MerkleNodeId, digest: Digest) extends MerkleTree
+case class MerkleLeaf(nodeId: MerkleNodeId, digest: Digest)                                          extends MerkleTree
 
 object MerkleTree {
 
@@ -29,21 +29,22 @@ object MerkleTree {
     def blockToLeaf(b: Block): TempMerkleLeaf =
       TempMerkleLeaf(ev.digest(b))
 
-    def buildTree(blocks: Array[Block]) = Try {
-      val leafs = blocks.map(blockToLeaf)
-      var trees: Seq[TempMerkleTree] = leafs.toSeq
+    def buildTree(blocks: Array[Block]) =
+      Try {
+        val leafs                      = blocks.map(blockToLeaf)
+        var trees: Seq[TempMerkleTree] = leafs.toSeq
 
-      while (trees.length > 1) {
-        trees = trees.grouped(2)
-          .map(x ⇒ mergeTrees(x(0), x(1)))
-          .toSeq
+        while (trees.length > 1)
+          trees = trees
+            .grouped(2)
+            .map(x ⇒ mergeTrees(x(0), x(1)))
+            .toSeq
+        trees.head
       }
-      trees.head
-    }
 
     def mergeTrees(n1: TempMerkleTree, n2: TempMerkleTree) = {
       val mergedDigest = n1.digest + n2.digest
-      val hash = ev.digest(mergedDigest.hash)
+      val hash         = ev.digest(mergedDigest.hash)
       TempMerkleHashNode(hash, n1, n2)
     }
 
@@ -63,15 +64,14 @@ object MerkleTree {
       toMerkle(tmt)
     }
 
-    buildTree(blocks ++ zeroed(blocks))
-      .toOption
+    buildTree(blocks ++ zeroed(blocks)).toOption
       .map(toFinalForm)
   }
 
   def zeroed(blocks: Seq[Block]): Array[Array[Byte]] = {
     def zero(i: Int): Int = {
       val factor = 2
-      var x = factor
+      var x      = factor
       while (x < i) x *= factor
       x - i
     }
@@ -80,14 +80,13 @@ object MerkleTree {
   }
 
   @tailrec
-  def findNode(nodeId: MerkleNodeId, merkleTree: MerkleTree): Option[MerkleTree] = {
+  def findNode(nodeId: MerkleNodeId, merkleTree: MerkleTree): Option[MerkleTree] =
     merkleTree match {
-      case _ if merkleTree.nodeId == nodeId ⇒ Option(merkleTree)
+      case _ if merkleTree.nodeId == nodeId                                 ⇒ Option(merkleTree)
       case MerkleHashNode(nId, _, _, right) if nodeId.id >= right.nodeId.id ⇒ findNode(nodeId, right)
-      case MerkleHashNode(nId, _, left, _) ⇒ findNode(nodeId, left)
-      case _ ⇒ None
+      case MerkleHashNode(nId, _, left, _)                                  ⇒ findNode(nodeId, left)
+      case _                                                                ⇒ None
     }
-  }
 }
 
 /*
@@ -110,4 +109,4 @@ it should "have the same top hash" in {
 
     digest1.hash.deep shouldBe digest2.hash.deep
   } F
- */ 
+ */

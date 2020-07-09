@@ -5,8 +5,8 @@ package object ds {
   type Block = Array[Byte]
 
   case class Digest(hash: Array[Byte]) extends AnyVal {
-    def +(that: Digest): Digest = Digest(this.hash ++ that.hash)
-    def ==(that: Digest): Boolean = this.hash.deep == that.hash.deep
+    def +(that: Digest): Digest   = Digest(this.hash ++ that.hash)
+    def ==(that: Digest): Boolean = this.hash == that.hash
   }
 
   case class MerkleNodeId(id: Int) extends AnyVal

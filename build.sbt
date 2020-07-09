@@ -1,9 +1,9 @@
 import com.typesafe.sbt.SbtMultiJvm
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
-import scalariform.formatter.preferences._
+//import scalariform.formatter.preferences._
 
-val akkaVersion = "2.5.23"
+val akkaVersion = "2.6.6"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 
@@ -13,7 +13,7 @@ val `akka-db` = project
   .settings(
     name := "akka-db",
     version := "0.0.1",
-    scalaVersion := "2.12.8",
+    scalaVersion := "2.13.2",
 
     //scalacOptions in Compile ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlog-reflective-calls", "-Xlint"),
 
@@ -23,24 +23,22 @@ val `akka-db` = project
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-http" % "10.1.8",
+      //"com.typesafe.akka" %% "akka-http" % "10.1.12",
+
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
+      "ch.qos.logback" % "logback-classic" % "1.2.3",
 
-      //"com.github.TanUkkii007" %% "akka-cluster-custom-downing" % "0.0.12",
-
-      "com.github.mpilquist" %% "simulacrum" % "0.12.0",
-
-      "org.rocksdb" % "rocksdbjni" % "5.17.2",
+      //"org.rocksdb" % "rocksdbjni" % "6.2.2",
+      "org.rocksdb" % "rocksdbjni" %  "6.10.2",  //Jun, 2020
 
       //https://github.com/wjglerum/IoT-collector.git
       //"io.waylay.influxdb" %% "influxdb-scala" % "2.0.1",
+      //"com.github.mpilquist" %% "simulacrum" % "0.12.0",
 
-      "ch.qos.logback" % "logback-classic" % "1.2.3",
-
-      "com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
+      //com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
       
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
-      ("com.lihaoyi" % "ammonite" % "1.6.9" % "test").cross(CrossVersion.full),
+      ("com.lihaoyi" % "ammonite" % "2.1.4" % "test").cross(CrossVersion.full),
 
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion),
 
@@ -51,17 +49,20 @@ val `akka-db` = project
 
     javaOptions ++= Seq("-Xmx3G", "-XX:MaxMetaspaceSize=2G", "-XX:+UseG1GC")
 
-  ) configs (MultiJvm)
+  ) configs MultiJvm
 
 //https://tpolecat.github.io/2017/04/25/scalac-flags.html
 
+scalafmtOnCompile := true
 
+/*
 scalariformPreferences := scalariformPreferences.value
   .setPreference(AlignArguments, true)
   .setPreference(AlignSingleLineCaseStatements, true)
   .setPreference(DoubleIndentConstructorArguments, true)
   .setPreference(DanglingCloseParenthesis, Preserve)
   .setPreference(RewriteArrowSymbols, true)
+*/
 
 //test:run test:console
 sourceGenerators in Test += Def.task {
@@ -78,5 +79,3 @@ PB.targets in Compile := Seq(
 
 // (optional) If you need scalapb/scalapb.proto or anything from google/protobuf/*.proto
 libraryDependencies += "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
-
-addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)

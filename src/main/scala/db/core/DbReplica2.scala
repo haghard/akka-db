@@ -2,19 +2,19 @@ package db.core
 
 import java.util.concurrent.ThreadLocalRandom
 
-import akka.actor.{ Address, Scheduler }
-import akka.actor.typed.{ ActorRef, Behavior }
-import akka.actor.typed.scaladsl.{ ActorContext, Behaviors }
-import akka.cluster.typed.{ Cluster, SelfUp, Subscribe, Unsubscribe }
+import akka.actor.{Address, Scheduler}
+import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.cluster.typed.{Cluster, SelfUp, Unsubscribe}
 import akka.util.Timeout
 import db.hashing.Rendezvous
 
-import scala.collection.immutable.{ SortedMap, TreeMap }
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.collection.immutable.{SortedMap, TreeMap}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{ Failure, Success, Try }
+import scala.util.{Failure, Success, Try}
 import akka.actor.typed.scaladsl.AskPattern._
-import db.core.KeyValueStorageBackend3.{ CPut3, KVRequest3, KVResponse3 }
+import db.core.KeyValueStorageBackend3.{CPut3, KVRequest3, KVResponse3}
 
 object DbReplica2 {
 
@@ -30,17 +30,19 @@ object DbReplica2 {
 
   case object WritePulse extends DbReplicaOps
 
-  def apply(rf: Int, writeConsistency: Int, id: Long): Behavior[DbReplicaOps] = {
+  def apply(rf: Int, writeConsistency: Int, id: Long): Behavior[DbReplicaOps] =
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up replica", id)
       val c = Cluster(ctx.system)
-      c.subscriptions ! akka.cluster.typed.Subscribe(ctx.messageAdapter[SelfUp] {
-        case SelfUp(_) ⇒ SelfUpDb
-      }, classOf[SelfUp])
+      c.subscriptions ! akka.cluster.typed.Subscribe(
+        ctx.messageAdapter[SelfUp] {
+          case SelfUp(_) ⇒ SelfUpDb
+        },
+        classOf[SelfUp]
+      )
 
       up(c, id)
     }
-  }
 
   def up(c: Cluster, id: Long): Behavior[DbReplicaOps] =
     Behaviors.receive { (ctx, _) ⇒
@@ -51,26 +53,32 @@ object DbReplica2 {
         ctx.messageAdapter[akka.actor.typed.receptionist.Receptionist.Listing] {
           case KeyValueStorageBackend.serviceKey.Listing(replicas) ⇒
             MembershipChanged(replicas)
-        })
+        }
+      )
 
       Behaviors.withTimers[DbReplicaOps] { timers ⇒
         timers.startSingleTimer(WritePulse, WritePulse, 3000.millis)
+        val writeTo: Timeout = Timeout(2.seconds)
 
-        implicit val sch = ctx.system.scheduler
-        implicit val ec = ctx.system.executionContext
-        implicit val writeTo: Timeout = Timeout(2.seconds)
-
-        running(ctx, Rendezvous[Replica],
-                TreeMap.empty[Address, ActorRef[KVRequest3]](Address.addressOrdering), c.selfMember.address, id)
+        running(
+          Rendezvous[Replica],
+          TreeMap.empty[Address, ActorRef[KVRequest3]](Address.addressOrdering),
+          c.selfMember.address,
+          id
+        )(ctx, writeTo)
       }
     }
 
-  def running(ctx: ActorContext[DbReplicaOps], h: Rendezvous[Replica], av: SortedMap[Address, ActorRef[KVRequest3]],
-    selfAddr: Address, id: Long)(implicit sch: Scheduler, ec: ExecutionContext, to: Timeout): Behavior[DbReplicaOps] =
+  def running(
+    h: Rendezvous[Replica],
+    av: SortedMap[Address, ActorRef[KVRequest3]],
+    selfAddr: Address,
+    id: Long
+  )(implicit ctx: ActorContext[DbReplicaOps], to: Timeout): Behavior[DbReplicaOps] =
     Behaviors.receiveMessage {
       case MembershipChanged(rs) ⇒
         // Need to understand if there are new members to ship the ring
-        ctx.log.warning("★ ★ ★ {} Cluster changed:{}", id, rs.mkString(","))
+        ctx.log.warn("★ ★ ★ {} Cluster changed:{}", id, rs.mkString(","))
 
         //idempotent add
         rs.foreach { r ⇒
@@ -78,34 +86,39 @@ object DbReplica2 {
           else h.add(Replica(r.path.address))
         }
 
-        val replicas = rs./:(TreeMap.empty[Address, ActorRef[KVRequest3]]) { (acc, ref) ⇒
+        val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[KVRequest3]]) { (acc, ref) ⇒
           if (ref.path.address.host.isEmpty)
-            acc + (selfAddr -> ref)
+            acc + (selfAddr → ref)
           else
-            acc + (ref.path.address -> ref)
+            acc + (ref.path.address → ref)
         }
+        running(h, replicas, selfAddr, id)
 
-        running(ctx, h, replicas, selfAddr, id)
       case WritePulse ⇒
-        val key = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
-        val replicas = Try(h.memberFor(key, 2)).getOrElse(Set.empty)
+        implicit val ec  = ctx.executionContext
+        implicit val sch = ctx.system.scheduler
+
+        val key       = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
+        val replicas  = Try(h.memberFor(key, 2)).getOrElse(Set.empty)
         val reachable = replicas.map(r ⇒ av.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}] alive:[{}]", key, replicas.mkString(","), reachable)
 
-        Future.traverse(reachable.toVector) { dbRef ⇒
-          dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
-        }.onComplete {
-          case Success(_) ⇒
-            ctx.self ! WritePulse
-          //ctx.scheduleOnce(10.millis, ctx.self, WritePulse)
-          case Failure(db.core.txn.InvariantViolation(_)) ⇒
-            ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
-          case Failure(ex) ⇒
-            ctx.log.error(ex, "Write error:")
-            ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
-        }
-
+        Future
+          .traverse(reachable.toVector) { dbRef ⇒
+            dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
+          }
+          .onComplete {
+            case Success(_) ⇒
+              ctx.self ! WritePulse
+            //ctx.scheduleOnce(10.millis, ctx.self, WritePulse)
+            case Failure(db.core.txn.InvariantViolation(_)) ⇒
+              ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
+            case Failure(ex) ⇒
+              ctx.log.error("Write error:", ex)
+              ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
+          }
         Behaviors.same
+
       case SelfUpDb ⇒
         ctx.log.error("Got SelfUpDb in running state !!!")
         Behaviors.stopped

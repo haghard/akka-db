@@ -1,3 +1,4 @@
+/*
 package db.cluster
 
 import akka.ConfigurationException
@@ -114,7 +115,7 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
         If A is killed(not a graceful exit) but b is healthy then: B kills itself. As a result you end up with zero nodes
         If B is killed(not a graceful exit) but a is healthy then: B stays. As a result you end up with one node cluster (A)
 
-  */
+ */
   def resolveLastTwo: Receive = {
     case KeepMajoritySbResolver.UnreachableTimeoutLast2(member) ⇒
       if (cluster.state.unreachable.contains(member) && !isAutoDowning) {
@@ -226,6 +227,7 @@ class KeepMajoritySbResolver(autoDownTimeout: FiniteDuration) extends Actor with
     case _: ClusterDomainEvent ⇒ // ignore
   }
 
-  override def receive = active
+  override def receive: Receive = active
 }
 
+ */

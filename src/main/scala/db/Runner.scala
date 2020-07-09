@@ -1,10 +1,10 @@
 package db
 
-import akka.actor.typed.{ ChildFailed, DispatcherSelector, PostStop, Terminated }
+import akka.actor.typed.{ActorSystem, ChildFailed, DispatcherSelector, PostStop, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{ DbReplica2, KeyValueStorageBackend3 }
+import db.core.{DbReplica2, KeyValueStorageBackend3}
 
 import scala.concurrent.duration._
 import akka.actor.typed.scaladsl.adapter._
@@ -29,7 +29,8 @@ object Runner extends App {
           remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
        }
-      """)
+      """
+  )
 
   def portConfig(port: Int) =
     ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
@@ -37,86 +38,99 @@ object Runner extends App {
   /*
     The number of failures that can be tolerated is equal to (Replication factor - 1) /2.
     For example, with 3x replication, one failure can be tolerated; with 5x replication, two failures, and so on.
-  */
+   */
 
-  val RF = 3
-  val CL = 3
+  val RF        = 3
+  val CL        = 3
   val ticketNmr = 500000
 
-  def alphaSys = akka.actor.typed.ActorSystem[Nothing](
-    //guardian
-    Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica2(RF, CL, 0l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+  def alphaSys: ActorSystem[Nothing] =
+    ActorSystem[Nothing](
+      //guardian
+      Behaviors
+        .setup[Unit] { ctx ⇒
+          val replica = ctx.spawn(DbReplica2(RF, CL, 0L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+          ctx.watch(replica)
 
-      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+          Behaviors.receiveSignal {
+            case (_, PostStop) ⇒
+              Behaviors.same
+            case (_, ChildFailed((replica, cause))) ⇒
+              ctx.log.error(s"★ ★ ★ ★ ★ ★  Replica 0: ChildFailed $replica", cause)
+              Behaviors.same
+            case (_, Terminated(`replica`)) ⇒
+              ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
+              Behaviors.stopped
+          }
+        }
+        .narrow,
+      systemName,
+      portConfig(2550).withFallback(config).withFallback(ConfigFactory.load())
+    )
 
-      ctx.watch(replica)
+  def bettaSys: ActorSystem[Nothing] =
+    ActorSystem[Nothing](
+      //guardian
+      Behaviors
+        .setup[Unit] { ctx ⇒
+          val replica = ctx.spawn(DbReplica2(RF, CL, 1L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          ctx.watch(replica)
 
-      Behaviors.receiveSignal {
-        case (_, PostStop) ⇒
-          Behaviors.same
-        case (_, ChildFailed((replica, cause))) ⇒
-          ctx.log.error(cause, "★ ★ ★ ★ ★ ★  Replica 0: ChildFailed {}", replica)
-          Behaviors.same
-        case (_, Terminated(`replica`)) ⇒
-          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
-          Behaviors.stopped
-      }
-    }.narrow,
-    systemName, portConfig(2550).withFallback(config).withFallback(ConfigFactory.load()))
+          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
 
-  def bettaSys = akka.actor.typed.ActorSystem[Nothing](
-    //guardian
-    Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica2(RF, CL, 1l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
-      ctx.watch(replica)
+          Behaviors.receiveSignal {
+            case (_, Terminated(`replica`)) ⇒
+              ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
+              Behaviors.stopped
+          }
+        }
+        .narrow,
+      systemName,
+      portConfig(2551).withFallback(config).withFallback(ConfigFactory.load())
+    )
 
-      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+  def gammaSys: ActorSystem[Nothing] =
+    ActorSystem[Nothing](
+      //guardian
+      Behaviors
+        .setup[Unit] { ctx ⇒
+          val replica = ctx.spawn(DbReplica2(RF, CL, 2L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          ctx.watch(replica)
 
-      Behaviors.receiveSignal {
-        case (_, Terminated(`replica`)) ⇒
-          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
-          Behaviors.stopped
-      }
-    }.narrow,
-    systemName, portConfig(2551).withFallback(config).withFallback(ConfigFactory.load()))
+          ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
 
-  def gammaSys = akka.actor.typed.ActorSystem[Nothing](
-    //guardian
-    Behaviors.setup[Unit] { ctx ⇒
-      val replica = ctx.spawn(DbReplica2(RF, CL, 2l), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
-      ctx.watch(replica)
+          Behaviors.receiveSignal {
+            case (_, Terminated(`replica`)) ⇒
+              ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
+              Behaviors.stopped
+          }
+        }
+        .narrow,
+      systemName,
+      portConfig(2552).withFallback(config).withFallback(ConfigFactory.load())
+    )
 
-      ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
+  val as    = alphaSys
+  val alpha = Cluster(as.toClassic)
 
-      Behaviors.receiveSignal {
-        case (_, Terminated(`replica`)) ⇒
-          ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
-          Behaviors.stopped
-      }
-    }.narrow,
-    systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
+  val bs    = bettaSys
+  val betta = Cluster(bs.toClassic)
 
-  val as = alphaSys
-  val alpha = Cluster(as.toUntyped)
-
-  val bs = bettaSys
-  val betta = Cluster(bs.toUntyped)
-
-  val gs = gammaSys
-  val gamma = Cluster(gs.toUntyped)
+  val gs    = gammaSys
+  val gamma = Cluster(gs.toClassic)
 
   alpha.join(alpha.selfAddress)
   betta.join(alpha.selfAddress)
   gamma.join(alpha.selfAddress)
 
-  Helpers.waitForAllNodesUp(as.toUntyped, bs.toUntyped, gs.toUntyped)
+  Helpers.waitForAllNodesUp(as.toClassic, bs.toClassic, gs.toClassic)
 
   /*
   alphaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
   bettaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
   gammaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  */
+   */
 
   /*Helpers.wait(20.second)
 

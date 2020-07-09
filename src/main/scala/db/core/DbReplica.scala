@@ -1,14 +1,13 @@
-
 package db.core
 
 import akka.actor.Address
-import akka.actor.typed.{ ActorRef, Behavior }
-import akka.actor.typed.receptionist.Receptionist.{ Listing, Register }
+import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.receptionist.Receptionist.{Listing, Register}
 import akka.actor.typed.receptionist.ServiceKey
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.ClusterEvent._
 import akka.cluster.MemberStatus
-import akka.cluster.typed.{ Cluster, SelfUp, Subscribe }
+import akka.cluster.typed.{Cluster, SelfUp, Subscribe}
 import db.hashing
 
 import scala.collection.immutable.SortedSet
@@ -18,7 +17,7 @@ object DbReplica {
 
   case object ClusterPulse extends ClusterDomainEvent
 
-  def apply(RF: Int, WC: Int, id: Long): Behavior[ClusterDomainEvent] = {
+  def apply(RF: Int, WC: Int, id: Long): Behavior[ClusterDomainEvent] =
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up Writer", id)
       val c = Cluster(ctx.system)
@@ -29,23 +28,27 @@ object DbReplica {
         join(c, SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], id)
       }
     }
-  }
 
   def join(
-    c: Cluster, available: SortedSet[Address], removed: SortedSet[Address],
-    hash: hashing.Rendezvous[Replica], id: Long): Behavior[ClusterDomainEvent] =
+    c: Cluster,
+    available: SortedSet[Address],
+    removed: SortedSet[Address],
+    hash: hashing.Rendezvous[Replica],
+    id: Long
+  ): Behavior[ClusterDomainEvent] =
     Behaviors.receivePartial {
       case (ctx, msg) ⇒
         msg match {
           case SelfUp(state) ⇒
             val am = state.members.filter(_.status == MemberStatus.Up).map(_.address)
             am.foreach(address ⇒ hash.add(Replica(address)))
-            ctx.log.warning("{} ★ ★ ★  Ring:{}", id, hash.toString)
+            ctx.log.warn("{} ★ ★ ★  Ring:{}", id, hash.toString)
 
             c.subscriptions ! Subscribe(ctx.self, classOf[ClusterDomainEvent])
             convergence(am, removed, hash, id)
           case ClusterPulse ⇒
-            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            ctx.log
+              .info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
           case _ ⇒
             Behaviors.same
@@ -53,8 +56,10 @@ object DbReplica {
     }
 
   def convergence(
-    available: SortedSet[Address], removed: SortedSet[Address],
-    hash: hashing.Rendezvous[Replica], id: Long
+    available: SortedSet[Address],
+    removed: SortedSet[Address],
+    hash: hashing.Rendezvous[Replica],
+    id: Long
   ): Behavior[ClusterDomainEvent] =
     //Behaviors.receiveMessagePartial {
     Behaviors.receivePartial {
@@ -62,21 +67,22 @@ object DbReplica {
         msg match {
           case MemberUp(member) ⇒
             hash.add(Replica(member.address))
-            val av = available + member.address
+            val av  = available + member.address
             val unv = removed - member.address
-            ctx.log.warning("{} ★ ★ ★  Ring:{}", id, hash.toString)
+            ctx.log.warn("{} ★ ★ ★  Ring:{}", id, hash.toString)
             convergence(av, unv, hash, id)
           case UnreachableMember(member) ⇒
-            ctx.system.log.warning("{} Unreachable = {}", id, member.address)
+            ctx.system.log.warn("{} Unreachable = {}", id, member.address)
             awaitForConvergence(available, removed, hash, id)
           case MemberExited(member) ⇒ //graceful exit
             val rm = removed + member.address
             val am = available - member.address
             hash.remove(Replica(member.address))
-            ctx.log.warning("{} replica {} exit gracefully", id, member.address)
+            ctx.log.warn("{} replica {} exit gracefully", id, member.address)
             convergence(am, rm, hash, id)
           case ClusterPulse ⇒
-            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            ctx.log
+              .info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
           case _ ⇒
             Behaviors.same
@@ -84,8 +90,10 @@ object DbReplica {
     }
 
   def awaitForConvergence(
-    available: SortedSet[Address], removed: SortedSet[Address],
-    hash: hashing.Rendezvous[Replica], id: Long
+    available: SortedSet[Address],
+    removed: SortedSet[Address],
+    hash: hashing.Rendezvous[Replica],
+    id: Long
   ): Behavior[ClusterDomainEvent] =
     Behaviors.receivePartial {
       case (ctx, msg) ⇒
@@ -104,7 +112,8 @@ object DbReplica {
             id, member.address, rm.mkString(","))*/
             convergence(am, rm, hash, id)
           case ClusterPulse ⇒
-            ctx.log.info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
+            ctx.log
+              .info("av:[{}] - rm:[{}]", available.map(_.port.get).mkString(","), removed.map(_.port.get).mkString(","))
             Behaviors.same
           case _ ⇒
             Behaviors.same
