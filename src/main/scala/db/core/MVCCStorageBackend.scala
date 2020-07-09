@@ -146,7 +146,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
       }
       .fold(
         ReservationReply.Failure(key, _, replyTo),
-        res ⇒ res.fold[ReservationReply](ReservationReply.Closed(key, replyTo))(ReservationReply.Success(_, replyTo))
+        _.fold[ReservationReply](ReservationReply.Closed(key, replyTo))(ReservationReply.Success(_, replyTo))
       )
 
   def write: Receive = {
