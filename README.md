@@ -1,4 +1,4 @@
-### Distributed, replicated, eventually consistent, key-value db on top of rocks db (POC)
+### Masterless, distributed, replicated, eventually consistent, key-value db on top of rocks db (a toy example)
 
 #Links
 https://github.com/facebook/rocksdb/blob/master/java/samples/src/main/java/TransactionSample.java

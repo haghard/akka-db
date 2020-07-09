@@ -58,10 +58,17 @@ https://github.com/facebook/rocksdb/wiki/Transactions
 https://github.com/facebook/rocksdb/wiki/Merge-Operator
 https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
 
-Example: Sell N tickets without overselling
 
-SNAPSHOT ISOLATION (Can't be totally available)
-https://jepsen.io/consistency/models/snapshot-isolation
+SNAPSHOT ISOLATION
+In a snapshot isolated system, each transaction appears to operate on an independent, consistent snapshot of the database.
+Its changes are visible only to that transaction until commit time, when all changes become visible atomically.
+If transaction T1 has modified an object x, and another transaction T2 committed a write to x after T1’s snapshot began, and before T1’s commit,
+then T1 must abort.
+(Can't be totally available) https://jepsen.io/consistency/models/snapshot-isolation
+
+Example: Sell N vouchers without overselling. This is impossible to achieve in distributed env with SNAPSHOT ISOLATION on each replica.
+We need SERIALIZABLE (or LINEALIZABLE) isolation here.
+So this is just a toy example.
 
   When a txn starts, it sees a consistent snapshot of the db that existed at the moment that the txn started.
   If two txns update the same object, then first writer wins.
@@ -134,13 +141,13 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         val snapshot = txn.getSnapshot
         val keyBytes = key.getBytes(UTF_8)
 
-        //READ
+        //READ to know how many vouchers have been sold
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
         if (sales.size < ticketsNum) {
           //merge activates org.rocksdb.StringAppendOperator
-          //WRITE
+          //WRITE if some left
           txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
           Some(key)
         } else None
