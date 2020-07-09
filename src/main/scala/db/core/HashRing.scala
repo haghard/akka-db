@@ -14,7 +14,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import akka.actor.typed.scaladsl.AskPattern._
-import db.core.KeyValueStorageBackend3.{CPut3, KVRequest3, KVResponse3}
+import db.core.KeyValueStorageBackend3.{BuySeat, BuySeatResult, KVRequest3}
 
 object HashRing {
 
@@ -35,7 +35,7 @@ object HashRing {
       ctx.log.info("{} Starting up replica", id)
       val c = Cluster(ctx.system)
       c.subscriptions ! akka.cluster.typed.Subscribe(
-        ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb  },
+        ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb },
         classOf[SelfUp]
       )
       selfUp(c, id, consistencyLevel)
@@ -98,14 +98,14 @@ object HashRing {
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
-        val key       = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
-        val replicas  = Try(hash.memberFor(key, consistencyLevel)).getOrElse(Set.empty)
-        val storages   = replicas.map(r ⇒ av.get(r.addr)).flatten
-        ctx.log.info("{} goes to:[{}]. All replicas:[{}]", key, replicas.mkString(","), storages)
+        val voucher  = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
+        val replicas = Try(hash.memberFor(voucher, consistencyLevel)).getOrElse(Set.empty)
+        val storages = replicas.map(r ⇒ av.get(r.addr)).flatten
+        ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
         Future
           .traverse(storages.toVector) { dbRef ⇒
-            dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
+            dbRef.ask[BuySeatResult](BuySeat(voucher, System.nanoTime.toString, _))
           }
           .onComplete {
             case Success(_) ⇒

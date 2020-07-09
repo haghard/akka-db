@@ -15,7 +15,7 @@ import DB._
 import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
-import db.core.KeyValueStorageBackend3.{CPut3, KVResponse3, PutFailure3, PutSuccess3}
+import db.core.KeyValueStorageBackend3.{BuySeat, BuySeatResult, PutFailure3, PutSuccess3}
 
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -26,14 +26,14 @@ object KeyValueStorageBackend3 {
 
   sealed trait KVRequest3
 
-  case class CPut3(key: String, value: String, replyTo: akka.actor.typed.ActorRef[KVResponse3]) extends KVRequest3
+  case class BuySeat(key: String, value: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]) extends KVRequest3
 
-  sealed trait KVResponse3
+  sealed trait BuySeatResult
 
-  case class PutSuccess3(key: String, replyTo: akka.actor.typed.ActorRef[KVResponse3]) extends KVResponse3
+  case class PutSuccess3(key: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]) extends BuySeatResult
 
-  case class PutFailure3(key: String, th: Throwable, replyTo: akka.actor.typed.ActorRef[KVResponse3])
-      extends KVResponse3
+  case class PutFailure3(key: String, th: Throwable, replyTo: akka.actor.typed.ActorRef[BuySeatResult])
+      extends BuySeatResult
 
   val sbKey = ServiceKey[KVProtocol]("StorageBackend")
 
@@ -69,8 +69,8 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
       We get SI automatically for free with MVCC
 
      Main benefits of MVCC
-       * Writers don't block readers
-       * Read-only txns can read a shapshot without acquiring a lock.
+ * Writers don't block readers
+ * Read-only txns can read a shapshot without acquiring a lock.
 
      Allows WRITE SKEW anomaly in general. However, it's impossible
       to run into WRITE SKEW in this example because in order to get it our transaction should touch two or more keys
@@ -126,7 +126,7 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
     txnDb.close()
   }
 
-  def put(key: String, value: String, replyTo: akka.actor.typed.ActorRef[KVResponse3]): KVResponse3 =
+  def put(key: String, value: String, replyTo: akka.actor.typed.ActorRef[BuySeatResult]): BuySeatResult =
     txn
       .writeTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         val kb = key.getBytes(UTF_8)
@@ -148,9 +148,9 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
       .fold(PutFailure3(key, _, replyTo), PutSuccess3(_, replyTo))
 
   def write: Receive = {
-    case CPut3(key, value, replyTo) ⇒
-      Future(put(key, value, replyTo)).mapTo[KVResponse3].pipeTo(self)
-    case r: KVResponse3 ⇒
+    case BuySeat(key, value, replyTo) ⇒
+      Future(put(key, value, replyTo)).mapTo[BuySeatResult].pipeTo(self)
+    case r: BuySeatResult ⇒
       r match {
         case s: PutSuccess3 ⇒
           s.replyTo ! s
