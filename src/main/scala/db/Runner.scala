@@ -1,13 +1,13 @@
 package db
 
-import akka.actor.typed.{ActorSystem, ChildFailed, DispatcherSelector, PostStop, Terminated}
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.scaladsl.adapter._
+import akka.actor.typed._
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
 import db.core.{HashRing, MVCCStorageBackend}
 
 import scala.concurrent.duration._
-import akka.actor.typed.scaladsl.adapter._
 
 //runMain db.Runner
 object Runner extends App {
@@ -117,38 +117,12 @@ object Runner extends App {
 
   Helpers.waitForAllNodesUp(as.toClassic, bs.toClassic, gs.toClassic)
 
-  /*
-  alphaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  bettaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-  gammaSys.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-   */
-
-  /*Helpers.wait(20.second)
-
-  println("****************** Kill gamma *********************")
-  gamma.leave(gamma.selfAddress)
-  gammaSys.terminate
-
-  Helpers.wait(20.second)
-
-  println("****************** new incarnation of gamma joins the cluster *********************")
-  val gammaSys2 = ActorSystem(systemName, portConfig(2552).withFallback(config).withFallback(ConfigFactory.load()))
-  val gamma2 = Cluster(gammaSys2)
-  gamma2.join(alpha.selfAddress)
-  gammaSys2.actorOf(DB.props(gamma2, 2l, RF, CL), "gamma")
-  gammaSys2.actorOf(KeyValueStorageBackend2.props, DB.PathSegment)
-
-  Helpers.waitForAllNodesUp(alphaSys, bettaSys, gammaSys2)*/
 
   Helpers.wait(10.second)
   println("★ ★ ★  gamma partitioned ★ ★ ★")
   //gamma.leave(gamma.selfAddress)
   gs.terminate
 
-  /*Helpers.wait(20.second)
-  println("★ ★ ★  betta killed  ★ ★ ★")
-  betta.leave(betta.selfAddress)
-  bettaSys.terminate*/
 
   Helpers.wait(20.second)
   println("★ ★ ★  betta partitioned  ★ ★ ★")
@@ -159,13 +133,4 @@ object Runner extends App {
 
   alpha.leave(alpha.selfAddress)
   as.terminate
-
-  /*Helpers.wait(20.second)
-  println("★ ★ ★  alpha patritioned  ★ ★ ★")
-  as.terminate
-
-  Helpers.wait(20.second)
-
-  betta.leave(alpha.selfAddress)
-  bs.terminate*/
 }

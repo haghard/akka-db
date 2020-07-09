@@ -9,7 +9,7 @@ object txn {
 
   final case class DBError(cause: RocksDBException) extends Exception(cause) with NoStackTrace
 
-  def withTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
+  def startTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Option[String]
   ): Either[Throwable, Option[String]] =
     /*

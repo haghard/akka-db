@@ -134,7 +134,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
   def put(key: String, value: String, replyTo: ActorRef[ReservationReply]): ReservationReply =
     txn
-      .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+      .startTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         //Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
 
@@ -145,9 +145,9 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
+        //WRITE sell if some left
         if (sales.size < ticketsNum) {
           //merge activates org.rocksdb.StringAppendOperator
-          //WRITE if some left
           txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
           Some(key)
         } else None
