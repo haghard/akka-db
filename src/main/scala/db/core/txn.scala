@@ -7,8 +7,7 @@ import scala.util.control.{NoStackTrace, NonFatal}
 
 object txn {
 
-  final case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
-  final case class DBError(cause: Throwable)       extends Exception(cause) with NoStackTrace
+  final case class DBError(cause: RocksDBException) extends Exception(cause) with NoStackTrace
 
   def withTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Option[String]

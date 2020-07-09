@@ -97,7 +97,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     .setMaxWriteBufferNumber(3)
     .setMaxSubcompactions(10)
     .setMaxBackgroundJobs(3)
-    .setMergeOperator(new org.rocksdb.StringAppendOperator(SEPARATOR)) //new CassandraValueMergeOperator() doesn't work
+    .setMergeOperator(new org.rocksdb.StringAppendOperator(SEPARATOR)) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
 
@@ -130,19 +130,21 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
       .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         //Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
+
+
         val snapshot = txn.getSnapshot
         val keyBytes = key.getBytes(UTF_8)
 
+        //READ
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
-        val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.empty[String])
+        val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
         if (sales.size < ticketsNum) {
-          //use merge to activate org.rocksdb.StringAppendOperator
+          //merge activates org.rocksdb.StringAppendOperator
+          //WRITE
           txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
           Some(key)
         } else None
-        //TODO: This isn't InvariantViolation. Use smth else to signal the end of the sells
-        //throw db.core.txn.InvariantViolation(s"Key $key. All tickets have been sold")
       }
       .fold(
         ReservationReply.Failure(key, _, replyTo),
@@ -153,8 +155,6 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     case Reserve(key, value, replyTo) ⇒
       Future(put(key, value, replyTo)).mapTo[ReservationReply].pipeTo(self)
     case r: ReservationReply ⇒
-      r.replyTo.tell(r)
-    /*
       r match {
         case reply: ReservationReply.Success ⇒
           reply.replyTo.tell(reply)
@@ -162,8 +162,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
           reply.replyTo ! reply
         case reply: ReservationReply.Closed =>
           reply.replyTo ! reply
-          Behaviors.stopped
-      }*/
+      }
   }
 
   override def receive: Receive =
