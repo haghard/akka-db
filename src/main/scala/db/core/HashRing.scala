@@ -2,7 +2,7 @@ package db.core
 
 import java.util.concurrent.ThreadLocalRandom
 
-import akka.actor.{Address, Scheduler}
+import akka.actor.Address
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.cluster.typed.{Cluster, SelfUp, Unsubscribe}
@@ -10,13 +10,13 @@ import akka.util.Timeout
 import db.hashing.Rendezvous
 
 import scala.collection.immutable.{SortedMap, TreeMap}
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import akka.actor.typed.scaladsl.AskPattern._
 import db.core.KeyValueStorageBackend3.{CPut3, KVRequest3, KVResponse3}
 
-object DbReplica2 {
+object HashRing {
 
   val Name = "replica"
 
@@ -30,21 +30,18 @@ object DbReplica2 {
 
   case object WritePulse extends DbReplicaOps
 
-  def apply(rf: Int, writeConsistency: Int, id: Long): Behavior[DbReplicaOps] =
+  def apply(rf: Int, consistencyLevel: Int, id: Long): Behavior[DbReplicaOps] =
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up replica", id)
       val c = Cluster(ctx.system)
       c.subscriptions ! akka.cluster.typed.Subscribe(
-        ctx.messageAdapter[SelfUp] {
-          case SelfUp(_) ⇒ SelfUpDb
-        },
+        ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb  },
         classOf[SelfUp]
       )
-
-      up(c, id)
+      selfUp(c, id, consistencyLevel)
     }
 
-  def up(c: Cluster, id: Long): Behavior[DbReplicaOps] =
+  def selfUp(c: Cluster, id: Long, consistencyLevel: Int): Behavior[DbReplicaOps] =
     Behaviors.receive { (ctx, _) ⇒
       c.subscriptions ! Unsubscribe(ctx.self)
 
@@ -64,26 +61,29 @@ object DbReplica2 {
           Rendezvous[Replica],
           TreeMap.empty[Address, ActorRef[KVRequest3]](Address.addressOrdering),
           c.selfMember.address,
-          id
+          id,
+          consistencyLevel
         )(ctx, writeTo)
       }
     }
 
   def running(
-    h: Rendezvous[Replica],
+    hash: Rendezvous[Replica],
     av: SortedMap[Address, ActorRef[KVRequest3]],
     selfAddr: Address,
-    id: Long
+    id: Long,
+    consistencyLevel: Int
   )(implicit ctx: ActorContext[DbReplicaOps], to: Timeout): Behavior[DbReplicaOps] =
-    Behaviors.receiveMessage {
+    Behaviors.receiveMessagePartial {
       case MembershipChanged(rs) ⇒
-        // Need to understand if there are new members to ship the ring
+        //TODO: handle it properly. You need to reconstruct the whole ring for the ground up
+
         ctx.log.warn("★ ★ ★ {} Cluster changed:{}", id, rs.mkString(","))
 
         //idempotent add
         rs.foreach { r ⇒
-          if (r.path.address.host.isEmpty) h.add(Replica(selfAddr))
-          else h.add(Replica(r.path.address))
+          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr))
+          else hash.add(Replica(r.path.address))
         }
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[KVRequest3]]) { (acc, ref) ⇒
@@ -92,19 +92,19 @@ object DbReplica2 {
           else
             acc + (ref.path.address → ref)
         }
-        running(h, replicas, selfAddr, id)
+        running(hash, replicas, selfAddr, id, consistencyLevel)
 
       case WritePulse ⇒
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
         val key       = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
-        val replicas  = Try(h.memberFor(key, 2)).getOrElse(Set.empty)
-        val reachable = replicas.map(r ⇒ av.get(r.addr)).flatten
-        ctx.log.info("{} goes to:[{}] alive:[{}]", key, replicas.mkString(","), reachable)
+        val replicas  = Try(hash.memberFor(key, consistencyLevel)).getOrElse(Set.empty)
+        val actors    = replicas.map(r ⇒ av.get(r.addr)).flatten
+        ctx.log.info("{} goes to:[{}] alive:[{}]", key, replicas.mkString(","), actors)
 
         Future
-          .traverse(reachable.toVector) { dbRef ⇒
+          .traverse(actors.toVector) { dbRef ⇒
             dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
           }
           .onComplete {
@@ -118,9 +118,5 @@ object DbReplica2 {
               ctx.scheduleOnce(100.millis, ctx.self, WritePulse)
           }
         Behaviors.same
-
-      case SelfUpDb ⇒
-        ctx.log.error("Got SelfUpDb in running state !!!")
-        Behaviors.stopped
     }
 }

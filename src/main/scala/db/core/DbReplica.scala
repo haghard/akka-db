@@ -1,3 +1,5 @@
+/*
+
 package db.core
 
 import akka.actor.Address
@@ -24,7 +26,7 @@ object DbReplica {
       c.subscriptions ! akka.cluster.typed.Subscribe(ctx.self, classOf[SelfUp])
 
       Behaviors.withTimers[ClusterDomainEvent] { t ⇒
-        t.startPeriodicTimer(ClusterPulse, ClusterPulse, 2000.millis)
+        t.startTimerWithFixedDelay(ClusterPulse, ClusterPulse, 2000.millis)
         join(c, SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], id)
       }
     }
@@ -120,3 +122,4 @@ object DbReplica {
         }
     }
 }
+*/

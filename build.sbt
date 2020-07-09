@@ -31,6 +31,10 @@ val `akka-db` = project
       //"org.rocksdb" % "rocksdbjni" % "6.2.2",
       "org.rocksdb" % "rocksdbjni" %  "6.10.2",  //Jun, 2020
 
+
+      //https://github.com/fusesource/rocksdbjni
+      //"org.fusesource" % "rocksdbjni" % "99-master-SNAPSHOT",
+
       //https://github.com/wjglerum/IoT-collector.git
       //"io.waylay.influxdb" %% "influxdb-scala" % "2.0.1",
       //"com.github.mpilquist" %% "simulacrum" % "0.12.0",

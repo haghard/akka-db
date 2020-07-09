@@ -4,7 +4,7 @@ import akka.actor.typed.{ActorSystem, ChildFailed, DispatcherSelector, PostStop,
 import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{DbReplica2, KeyValueStorageBackend3}
+import db.core.{HashRing, KeyValueStorageBackend3}
 
 import scala.concurrent.duration._
 import akka.actor.typed.scaladsl.adapter._
@@ -24,9 +24,6 @@ object Runner extends App {
           }
 
           actor.provider = cluster
-
-          remote.artery.enabled = true
-          remote.artery.transport = tcp
           remote.artery.canonical.hostname = 127.0.0.1
        }
       """
@@ -35,13 +32,8 @@ object Runner extends App {
   def portConfig(port: Int) =
     ConfigFactory.parseString(s"akka.remote.artery.canonical.port = $port")
 
-  /*
-    The number of failures that can be tolerated is equal to (Replication factor - 1) /2.
-    For example, with 3x replication, one failure can be tolerated; with 5x replication, two failures, and so on.
-   */
-
   val RF        = 3
-  val CL        = 3
+  val CL        = 2
   val ticketNmr = 500000
 
   def alphaSys: ActorSystem[Nothing] =
@@ -49,7 +41,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(DbReplica2(RF, CL, 0L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, CL, 0L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
           ctx.watch(replica)
 
@@ -74,7 +66,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(DbReplica2(RF, CL, 1L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, CL, 1L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
@@ -95,7 +87,7 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(DbReplica2(RF, CL, 2L), DbReplica2.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, CL, 2L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
           ctx.watch(replica)
 
           ctx.actorOf(KeyValueStorageBackend3.props(ctx.system.receptionist), "sb")
