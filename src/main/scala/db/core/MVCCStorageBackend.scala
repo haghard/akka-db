@@ -88,7 +88,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
 
-  val SEPARATOR = '@'
+  val SEPARATOR = ';'
   val dbPath    = new File(s"./$path/replica-${cluster.selfAddress.port.get}").getAbsolutePath
 
   val options = new Options()
