@@ -77,18 +77,10 @@ Main benefits of MVCC
 
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
 final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
-  org.rocksdb.RocksDB.loadLibrary()
-
-  receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
-
-  Try(Files.createDirectory(Paths.get(s"./$path")))
-
-  val cluster = Cluster(context.system)
-  val sa      = cluster.selfAddress
-
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
 
   val SEPARATOR = ';'
+  val cluster   = Cluster(context.system)
   val dbPath    = new File(s"./$path/replica-${cluster.selfAddress.port.get}").getAbsolutePath
 
   val options = new Options()
@@ -97,7 +89,9 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     .setMaxWriteBufferNumber(3)
     .setMaxSubcompactions(10)
     .setMaxBackgroundJobs(3)
-    .setMergeOperator(new org.rocksdb.StringAppendOperator(SEPARATOR)) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
+    .setMergeOperator(
+      new org.rocksdb.StringAppendOperator(SEPARATOR)
+    ) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
 
@@ -108,7 +102,13 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     TransactionDB.open(options, txnDbOptions, dbPath)
 
   override def preStart(): Unit = {
+    Files.createDirectory(Paths.get(s"./$path"))
+    org.rocksdb.RocksDB.loadLibrary()
+
     log.info("dbPath:{}", dbPath)
+
+    receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
+
     MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
       iter.seekToFirst
       while (iter.isValid) {
@@ -130,7 +130,6 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
       .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         //Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
-
 
         val snapshot = txn.getSnapshot
         val keyBytes = key.getBytes(UTF_8)
@@ -160,7 +159,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
           reply.replyTo.tell(reply)
         case reply: ReservationReply.Failure ⇒
           reply.replyTo ! reply
-        case reply: ReservationReply.Closed =>
+        case reply: ReservationReply.Closed ⇒
           reply.replyTo ! reply
       }
   }
