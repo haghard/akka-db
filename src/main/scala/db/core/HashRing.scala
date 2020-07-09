@@ -100,6 +100,10 @@ object HashRing {
         val storagesForReplica = replicas.map(r ⇒ storages.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
+        //TODO: this use case is not save because
+        // What if it succeeds on one replica and fails on another ???
+        // If N concurrent clients hit the same key at the same time on different replicas, different winners are possible.
+
         Future
           .traverse(storagesForReplica.toVector) { storage ⇒
             storage.ask[ReservationReply](Reserve(voucher, System.nanoTime.toString, _))
@@ -113,8 +117,6 @@ object HashRing {
             r
           }
 
-        //TODO: what if it succeeds on one replica and fails on another ???
-        //TODO: If N concurrent clients hit the same key at the same time, different winners are possible.
         /*.onComplete {
             case Success(_) ⇒
               ctx.self ! Write

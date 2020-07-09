@@ -105,7 +105,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     Files.createDirectory(Paths.get(s"./$path"))
     org.rocksdb.RocksDB.loadLibrary()
 
-    log.info("dbPath:{}", dbPath)
+    log.info("DB file path: {}", dbPath)
 
     receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
 
