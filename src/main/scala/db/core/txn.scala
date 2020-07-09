@@ -24,7 +24,7 @@ object txn {
       Left(ex)
   }
 
-  private def managedR[T <: Transaction](txn: T, logger: LoggingAdapter)(
+  private def write[T <: Transaction](txn: T)(
     f: T ⇒ Either[Throwable, String]
   )(onError: PartialFunction[Throwable, Either[Throwable, String]]): Either[Throwable, String] =
     try {
@@ -37,7 +37,7 @@ object txn {
   def writeTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Either[Throwable, String]
   ): Either[Throwable, String] =
-    managedR[T](txn, logger)(f)(txnErrorHandler(txn, logger))
+    write[T](txn)(f)(txnErrorHandler(txn, logger))
 
   def readTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Either[Throwable, Option[Set[String]]]

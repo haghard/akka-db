@@ -100,11 +100,11 @@ object HashRing {
 
         val key       = keys(ThreadLocalRandom.current.nextInt(1000) % keys.size)
         val replicas  = Try(hash.memberFor(key, consistencyLevel)).getOrElse(Set.empty)
-        val actors    = replicas.map(r ⇒ av.get(r.addr)).flatten
-        ctx.log.info("{} goes to:[{}] alive:[{}]", key, replicas.mkString(","), actors)
+        val storages   = replicas.map(r ⇒ av.get(r.addr)).flatten
+        ctx.log.info("{} goes to:[{}]. All replicas:[{}]", key, replicas.mkString(","), storages)
 
         Future
-          .traverse(actors.toVector) { dbRef ⇒
+          .traverse(storages.toVector) { dbRef ⇒
             dbRef.ask[KVResponse3](CPut3(key, System.nanoTime.toString, _))
           }
           .onComplete {

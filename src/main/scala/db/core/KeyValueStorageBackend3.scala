@@ -20,6 +20,7 @@ import db.core.KeyValueStorageBackend3.{CPut3, KVResponse3, PutFailure3, PutSucc
 import scala.util.Try
 import scala.util.control.NonFatal
 import KeyValueStorageBackend3._
+import akka.actor.typed.scaladsl.adapter._
 
 object KeyValueStorageBackend3 {
 
@@ -58,7 +59,7 @@ https://github.com/facebook/rocksdb/wiki/Transactions
 https://github.com/facebook/rocksdb/wiki/Merge-Operator
 https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
 
-    Example: Sell N tickets concurrency problem
+    Example: Sell N tickets without overselling
 
     SNAPSHOT ISOLATION (Can't be totally available)
     https://jepsen.io/consistency/models/snapshot-isolation
@@ -68,11 +69,11 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
       We get SI automatically for free with MVCC
 
      Main benefits of MVCC
- * Writers don't block readers
- * Read-only txns can read a shapshot without acquiring a lock.
+       * Writers don't block readers
+       * Read-only txns can read a shapshot without acquiring a lock.
 
      Allows WRITE SKEW anomaly in general. However, it's impossible
-      to run into WRITE SKEW in this example because we should have at least two keys to write to
+      to run into WRITE SKEW in this example because in order to get it our transaction should touch two or more keys
  */
 
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
@@ -80,8 +81,6 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
     extends Actor
     with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
-
-  import akka.actor.typed.scaladsl.adapter._
 
   receptionist ! akka.actor.typed.receptionist.Receptionist.Register(KeyValueStorageBackend.serviceKey, self)
 
@@ -133,7 +132,7 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
         val kb = key.getBytes(UTF_8)
 
         /*
-        Guarding against Read-Write Conflicts:
+        Guards against Read-Write Conflicts:
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
          */
 
@@ -143,7 +142,7 @@ class KeyValueStorageBackend3(receptionist: akka.actor.typed.ActorRef[Receptioni
 
         //use merge to activate org.rocksdb.StringAppendOperator
         if (sales.size < ticketsNum) txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
-        else throw db.core.txn.InvariantViolation(s"Key ${key}. All tickets have been sold")
+        else throw db.core.txn.InvariantViolation(s"Key $key. All tickets have been sold")
         Right(key)
       }
       .fold(PutFailure3(key, _, replyTo), PutSuccess3(_, replyTo))
