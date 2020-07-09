@@ -8,7 +8,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.typed.{Cluster, SelfUp, Unsubscribe}
 import akka.util.Timeout
-import db.core.MVCCStorageBackend.{ReservationReply, ReserveSeat}
+import db.core.MVCCStorageBackend.{ReservationReply, Reserve}
 import db.hashing.Rendezvous
 
 import scala.collection.immutable.{SortedMap, TreeMap}
@@ -102,17 +102,20 @@ object HashRing {
 
         Future
           .traverse(storagesForReplica.toVector) { storage ⇒
-            storage.ask[ReservationReply](ReserveSeat(voucher, System.nanoTime.toString, _))
+            storage.ask[ReservationReply](Reserve(voucher, System.nanoTime.toString, _))
           }
           .transform { r ⇒
             r.map { replies ⇒
-              println(voucher + ": " + replies.mkString(",")) //look that we've got
+              //if ReservationReply.Failure(key, _, replyTo) retry
+              //else if ReservationReply.Success next
+              //else if ReservationReply.Closed stop
             }
             r
           }
-          //TODO: what if it succeeds on one replica and fails on another ???
-          //TODO: If N concurrent clients hit the same key at the same time, different winners are possible.
-          .onComplete {
+
+        //TODO: what if it succeeds on one replica and fails on another ???
+        //TODO: If N concurrent clients hit the same key at the same time, different winners are possible.
+        /*.onComplete {
             case Success(_) ⇒
               ctx.self ! Write
             //ctx.scheduleOnce(10.millis, ctx.self, WritePulse)
@@ -122,7 +125,8 @@ object HashRing {
             case Failure(ex) ⇒
               ctx.log.error("Write error:", ex)
               ctx.scheduleOnce(100.millis, ctx.self, Write)
-          }
+          }*/
+
         Behaviors.same
     }
 }

@@ -8,11 +8,12 @@ import scala.util.control.{NoStackTrace, NonFatal}
 object txn {
 
   final case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
+  final case class DBError(cause: Throwable)       extends Exception(cause) with NoStackTrace
 
   def withTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
-    f: T ⇒ String
-  ): Either[Throwable, String] = {
-
+    f: T ⇒ Option[String]
+  ): Either[Throwable, Option[String]] =
+    /*
     def txnErrorHandler(
       txn: Transaction,
       logger: LoggingAdapter
@@ -39,7 +40,8 @@ object txn {
       } catch onError
       finally txn.close
 
-    //write[T](txn)(f)(txnErrorHandler(txn, logger))
+    write[T](txn)(f)(txnErrorHandler(txn, logger))
+     */
 
     try {
       val key = f(txn)
@@ -51,13 +53,12 @@ object txn {
         val errName = ex.getStatus.getCode.name
         logger.error(s"Transaction error: $errName", ex)
         txn.rollback
-        Left(new Exception(s"Transaction error: $errName"))
+        Left(DBError(ex))
       case NonFatal(ex) ⇒
         logger.error(s"Transaction error", ex)
         txn.rollback
         Left(ex)
     } finally txn.close
-  }
 
   def readTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
     f: T ⇒ Either[Throwable, Option[Set[String]]]

@@ -11,7 +11,7 @@ import akka.actor.{Actor, ActorLogging, Props}
 import akka.cluster.Cluster
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
-import db.core.MVCCStorageBackend.{ReservationReply, ReserveSeat, _}
+import db.core.MVCCStorageBackend.{ReservationReply, Reserve, _}
 import org.rocksdb.{Options, _}
 import org.rocksdb.util.SizeUnit
 
@@ -27,15 +27,17 @@ object MVCCStorageBackend {
 
   sealed trait Protocol
 
-  final case class ReserveSeat(voucher: String, client: String, replyTo: ActorRef[ReservationReply]) extends Protocol
+  final case class Reserve(voucher: String, client: String, replyTo: ActorRef[ReservationReply]) extends Protocol
 
   sealed trait ReservationReply {
     def key: String
+    def replyTo: ActorRef[ReservationReply]
   }
 
   object ReservationReply {
-    final case class Success(key: String, replyTo: ActorRef[ReservationReply])                extends ReservationReply
-    final case class Failure(key: String, th: Throwable, replyTo: ActorRef[ReservationReply]) extends ReservationReply
+    final case class Success(key: String, replyTo: ActorRef[ReservationReply])                 extends ReservationReply
+    final case class Closed(key: String, replyTo: ActorRef[ReservationReply])                  extends ReservationReply
+    final case class Failure(key: String, err: Throwable, replyTo: ActorRef[ReservationReply]) extends ReservationReply
   }
 
   def managedIter(r: RocksIterator, log: LoggingAdapter)(f: RocksIterator ⇒ Unit) =
@@ -134,27 +136,34 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.empty[String])
 
-        if (sales.size < ticketsNum)
+        if (sales.size < ticketsNum) {
           //use merge to activate org.rocksdb.StringAppendOperator
           txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
-        else
-          //TODO: This isn't InvariantViolation. Use smth else to signal the end of the sells
-          throw db.core.txn.InvariantViolation(s"Key $key. All tickets have been sold")
-
-        key
+          Some(key)
+        } else None
+        //TODO: This isn't InvariantViolation. Use smth else to signal the end of the sells
+        //throw db.core.txn.InvariantViolation(s"Key $key. All tickets have been sold")
       }
-      .fold(ReservationReply.Failure(key, _, replyTo), ReservationReply.Success(_, replyTo))
+      .fold(
+        ReservationReply.Failure(key, _, replyTo),
+        res ⇒ res.fold[ReservationReply](ReservationReply.Closed(key, replyTo))(ReservationReply.Success(_, replyTo))
+      )
 
   def write: Receive = {
-    case ReserveSeat(key, value, replyTo) ⇒
+    case Reserve(key, value, replyTo) ⇒
       Future(put(key, value, replyTo)).mapTo[ReservationReply].pipeTo(self)
     case r: ReservationReply ⇒
+      r.replyTo.tell(r)
+    /*
       r match {
         case reply: ReservationReply.Success ⇒
           reply.replyTo.tell(reply)
         case reply: ReservationReply.Failure ⇒
           reply.replyTo ! reply
-      }
+        case reply: ReservationReply.Closed =>
+          reply.replyTo ! reply
+          Behaviors.stopped
+      }*/
   }
 
   override def receive: Receive =
