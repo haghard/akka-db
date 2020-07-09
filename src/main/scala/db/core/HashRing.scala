@@ -107,6 +107,7 @@ object HashRing {
           .traverse(storages.toVector) { dbRef ⇒
             dbRef.ask[BuySeatResult](BuySeat(voucher, System.nanoTime.toString, _))
           }
+          //TODO: what if it succeeds on one replica and fails on another ???
           .onComplete {
             case Success(_) ⇒
               ctx.self ! WritePulse
