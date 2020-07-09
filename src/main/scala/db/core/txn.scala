@@ -9,8 +9,8 @@ object txn {
 
   final case class InvariantViolation(msg: String) extends Exception(msg) with NoStackTrace
 
-  def mvccWrite[T <: Transaction](txn: T, logger: LoggingAdapter)(
-    f: T ⇒ Either[Throwable, String]
+  def withTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
+    f: T ⇒ String
   ): Either[Throwable, String] = {
 
     def txnErrorHandler(
@@ -42,9 +42,9 @@ object txn {
     //write[T](txn)(f)(txnErrorHandler(txn, logger))
 
     try {
-      val r = f(txn)
+      val key = f(txn)
       txn.commit()
-      r
+      Right(key)
     } catch {
       //concurrent modification
       case ex: RocksDBException ⇒
@@ -57,7 +57,6 @@ object txn {
         txn.rollback
         Left(ex)
     } finally txn.close
-
   }
 
   def readTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
@@ -75,12 +74,12 @@ object txn {
     } finally txn.close
 
   def readTxn0[T <: Transaction](txn: T, logger: LoggingAdapter)(
-    f: T ⇒ Either[Throwable, Option[String]]
+    f: T ⇒ Option[String]
   ): Either[Throwable, Option[String]] =
     try {
       val r = f(txn)
       txn.commit()
-      r
+      Right(r)
     } catch {
       case NonFatal(ex) ⇒
         logger.error("Transaction [Read] error", ex)

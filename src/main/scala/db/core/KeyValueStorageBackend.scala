@@ -1,3 +1,5 @@
+/*
+
 package db.core
 
 import java.io.File
@@ -29,24 +31,23 @@ object KeyValueStorageBackend {
 }
 
 /*
-    This example: Sell N tickets concurrency
+This example: Sell N tickets concurrency
 
-    SNAPSHOT ISOLATION (Can't be totally available)
-    https://jepsen.io/consistency/models/snapshot-isolation
+SNAPSHOT ISOLATION (Can't be totally available)
+https://jepsen.io/consistency/models/snapshot-isolation
 
-      When a txn starts, it sees a consistent snapshot of the db that existed at the moment that the txn started.
-      If two txns update the same object, then first writer wins and second fails
-      We get SI automatically for free with MVCC
+  When a txn starts, it sees a consistent snapshot of the db that existed at the moment that the txn started.
+  If two txns update the same object, then first writer wins and second fails
+  We get SI automatically for free with MVCC
 
-     Main benefits of MVCC
+ Main benefits of MVCC
  * Writers don't block readers
  * Read-only txns can read a shapshot without acquiring a lock.
 
-     Allows WRITE SKEW anomaly in general. However, it's impossible
-      to run into WRITE SKEW in this example because we should have at least two variables
+ Allows WRITE SKEW anomaly in general. However, it's impossible
+  to run into WRITE SKEW in this example because we should have at least two variables
  */
-
-class KeyValueStorageBackend extends Actor with ActorLogging {
+final class KeyValueStorageBackend extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
 
   val path = "rocks-db"
@@ -84,14 +85,14 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
 
   def put(key: String, value: String, node: Node, replyTo: ActorRef): PutResponse =
     txn
-      .mvccWrite(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+      .readBeforeWrite(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         val kb          = key.getBytes(UTF_8)
         val snapshot    = txn.getSnapshot
         val readOptions = new ReadOptions().setSnapshot(snapshot)
         /*
         Guarding against Read-Write Conflicts:
           txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
-         */
+ */
         val prevValue = txn.getForUpdate(readOptions, kb, true)
         if (prevValue eq null)
           txn.put(kb, Runner.ticketNmr.toString.getBytes(UTF_8))
@@ -100,11 +101,11 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
           if (prevCounter > 0) {
             val newCounter = (prevCounter - 1).toString
             txn.put(kb, newCounter.getBytes(UTF_8))
-          } else throw db.core.txn.InvariantViolation(s"Key ${key} shouldn't go below 0")
+          } else throw db.core.txn.InvariantViolation(s"$key shouldn't go below 0")
         }
-        Right(key)
+        key
       }
-      .fold((PutFailure(key, _, replyTo)), PutSuccess(_, replyTo))
+      .fold(PutFailure(key, _, replyTo), PutSuccess(_, replyTo))
 
   def get(key: String, replyTo: ActorRef): GetResponse =
     txn
@@ -112,10 +113,9 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
         val snapshot    = txn.getSnapshot
         val readOptions = new ReadOptions().setSnapshot(snapshot)
         val valueBts    = txn.get(readOptions, key.getBytes(UTF_8))
-        if (valueBts ne null) Right(Some(new String(valueBts)))
-        else Right(None)
+        if (valueBts ne null) Some(new String(valueBts)) else None
       }
-      .fold((GetFailure(key, _, replyTo)), GetSuccess0(_, replyTo))
+      .fold(GetFailure(key, _, replyTo), GetSuccess0(_, replyTo))
 
   def write: Receive = {
     case CPut(key, value, node) ⇒
@@ -149,3 +149,4 @@ class KeyValueStorageBackend extends Actor with ActorLogging {
         log.error(ex, "Unexpected error")
     }
 }
+ */

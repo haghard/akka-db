@@ -1,3 +1,5 @@
+/*
+
 package db.core
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -198,3 +200,4 @@ class DB(cluster: Cluster, startWith: Long, rf: Int, writeC: Int)
   override def receive =
     active(SortedSet[Address](), SortedSet[Address](), hashing.Rendezvous[db.core.Replica], startWith)
 }
+ */

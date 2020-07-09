@@ -46,9 +46,9 @@ object HashRing {
       c.subscriptions ! Unsubscribe(ctx.self)
 
       ctx.system.receptionist ! akka.actor.typed.receptionist.Receptionist.Subscribe(
-        KeyValueStorageBackend.serviceKey,
+        MVCCStorageBackend.Key,
         ctx.messageAdapter[akka.actor.typed.receptionist.Receptionist.Listing] {
-          case KeyValueStorageBackend.serviceKey.Listing(replicas) ⇒
+          case MVCCStorageBackend.Key.Listing(replicas) ⇒
             MembershipChanged(replicas)
         }
       )
