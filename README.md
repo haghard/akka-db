@@ -42,3 +42,26 @@ https://github.com/facebook/rocksdb/wiki/Merge-Operator
 https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf9090/java/src/test/java/org/rocksdb/RocksDBTest.java
 
 https://github.com/lmdbjava/lmdbjava
+
+
+### Next Steps
+
+To build a db with snapshot isolation and causal consistency to get referential integrity
+
+Build smth similar to FMK (NHS like system)
+
+Prescription that contains the reference to doctor, patent, pharmacy and medication.
+Invariants (statements that always stays true):
+
+AP-compatible invariant: Relative order
+Referential integrity: a reference to doctor|patient|pharmacy|medication always linked to an existing object.
+
+AP-compatible invariant: Joint update
+Atomicity: once I have created a new prescription,  all references appear atomically (like a transaction ).
+
+CAP-sensitive  Precondition-check (if… then…)
+Medication should not be over delivered.
+
+
+https://youtu.be/Vd2I9v3pYpA?t=1282
+https://www.youtube.com/watch?v=lO-UfHASUSE
