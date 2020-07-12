@@ -44,24 +44,48 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
 https://github.com/lmdbjava/lmdbjava
 
 
+https://rocksdb.org/blog/
+
+https://www.youtube.com/watch?v=aKAJMd0iKtI
+
+https://rockset.com/blog/ivalue-efficient-representation-of-dynamic-types-in-cplusplus/
+
+https://rockset.com/blog/rocksdb-is-eating-the-database-world/
+
+https://rockset.com/blog/index-scan-using-rocksets-search-index-to-speed-up-range-scans/
+
+https://rockset.com/blog/how-we-use-rocksdb-at-rockset/
+
+https://www.cockroachlabs.com/blog/cockroachdb-on-rocksd/
+
 ### Next Steps
 
 To build a db with snapshot isolation and causal consistency to get referential integrity
 
 Build smth similar to FMK (NHS like system)
 
+https://youtu.be/Vd2I9v3pYpA?t=1282
+https://www.youtube.com/watch?v=lO-UfHASUSE
+https://www.youtube.com/watch?v=qO9oK7QKbZY
+https://www.youtube.com/watch?v=ol1D9X2_nJc
+https://www.youtube.com/watch?v=-v_1aJJujdg
+
+
+
 Prescription that contains the reference to doctor, patent, pharmacy and medication.
 Invariants (statements that always stays true):
 
-AP-compatible invariant: Relative order
+AP-compatible invariant: `Relative order`
 Referential integrity: a reference to doctor|patient|pharmacy|medication always linked to an existing object.
+Implementation: causally related updates always replicated in the same order (like a batch)
 
-AP-compatible invariant: Joint update
-Atomicity: once I have created a new prescription,  all references appear atomically (like a transaction ).
+AP-compatible invariant: `Joint update`
+Atomicity: once I have created a new prescription, all references appear atomically.
+Implementation: We need a notion of being able to write all updates atomically. 
+The updates are delivered in causal order, the updates inside the transaction are ordered and the batches are applied atomically.    
 
-CAP-sensitive  Precondition-check (if… then…)
+`Relative order` combined with `Joint update` (transactional causal consistency) is a stronger consistency model for AP systems 
+
+CAP-sensitive  `Precondition-check` (if… then…)
 Medication should not be over delivered.
 
-
-https://youtu.be/Vd2I9v3pYpA?t=1282
-https://www.youtube.com/watch?v=lO-UfHASUSE
