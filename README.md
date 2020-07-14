@@ -58,6 +58,8 @@ https://rockset.com/blog/how-we-use-rocksdb-at-rockset/
 
 https://www.cockroachlabs.com/blog/cockroachdb-on-rocksd/
 
+https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-value-storage/
+
 ### Next Steps
 
 To build a db with snapshot isolation and causal consistency to get referential integrity
@@ -68,7 +70,7 @@ https://youtu.be/Vd2I9v3pYpA?t=1282
 https://www.youtube.com/watch?v=lO-UfHASUSE
 https://www.youtube.com/watch?v=qO9oK7QKbZY
 https://www.youtube.com/watch?v=ol1D9X2_nJc
-https://www.youtube.com/watch?v=-v_1aJJujdg
+https://www.youtube.com/watch?v=-v_1aJJujdg                      *
 
 
 
