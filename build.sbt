@@ -3,7 +3,7 @@ import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
 //import scalariform.formatter.preferences._
 
-val akkaVersion = "2.6.6"
+val akkaVersion = "2.6.8"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 
