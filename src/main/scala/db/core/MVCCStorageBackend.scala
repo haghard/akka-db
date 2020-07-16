@@ -143,6 +143,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
         //READ to know how many vouchers have been sold
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
+        //get multiple keys txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
         //WRITE sell if some left
