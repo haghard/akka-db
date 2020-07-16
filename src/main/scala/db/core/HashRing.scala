@@ -79,9 +79,7 @@ object HashRing {
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
 
         //idempotent add
-        rs.foreach(r ⇒
-          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address))
-        )
+        rs.foreach(r ⇒ if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address)))
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
           if (ref.path.address.host.isEmpty)
@@ -97,7 +95,7 @@ object HashRing {
 
         val voucher            = voucherKeys(ThreadLocalRandom.current.nextInt() % voucherKeys.size)
         val replicas           = Try(hash.memberFor(voucher, replicaId)).getOrElse(Set.empty)
-        val storagesForReplica = replicas.map(r ⇒ storages.get(r.addr)).flatten
+        val storageForReplica  = replicas.map(r ⇒ storages.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
         //TODO: this use case is not save because
@@ -105,7 +103,7 @@ object HashRing {
         // If N concurrent clients hit the same key at the same time on different replicas, different winners are possible.
 
         Future
-          .traverse(storagesForReplica.toVector) { storage ⇒
+          .traverse(storageForReplica.toVector) { storage ⇒
             storage.ask[ReservationReply](Reserve(voucher, System.nanoTime.toString, _))
           }
           .transform { r ⇒
