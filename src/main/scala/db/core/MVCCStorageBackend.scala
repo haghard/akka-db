@@ -211,6 +211,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     // Define a prefix. In this way, a fixed length prefix extractor. A recommended one to use.
     //.useFixedLengthPrefixExtractor(3)
 
+
   //Putting read_options.total_order_seek = true will make sure the query returns the same result as if there is no prefix bloom filter.
   //new ReadOptions().setTotalOrderSeek(false)
 
@@ -260,6 +261,12 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
 
         //txn.getIterator(new ReadOptions().setSnapshot(snapshot))
+
+        //get multiple keys txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
+        //https://github.com/facebook/rocksdb/blob/189f0c27aaecdf17ae7fc1f826a423a28b77984f/java/src/test/java/org/rocksdb/OptimisticTransactionTest.java#L96
+        //if at least one key from that set of keys was modified between multiGetForUpdate, put|merge and commit,
+        //we get RocksDBException with Status.Code.Busy
+
 
         //get multiple keys
 

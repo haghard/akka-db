@@ -97,3 +97,5 @@ The updates are delivered in causal order, the updates inside the transaction ar
 CAP-sensitive  `Precondition-check` (if… then…)
 Medication should not be over delivered.
 
+
+https://codeburst.io/protocol-buffers-part-2-the-untold-parts-of-using-any-6a328560048d
