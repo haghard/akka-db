@@ -13,7 +13,7 @@ val `akka-db` = project
   .settings(
     name := "akka-db",
     version := "0.0.1",
-    scalaVersion := "2.13.2",
+    scalaVersion := "2.13.3",
 
     //scalacOptions in Compile ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlog-reflective-calls", "-Xlint"),
 
@@ -42,7 +42,7 @@ val `akka-db` = project
       //com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
       
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
-      ("com.lihaoyi" % "ammonite" % "2.1.4" % "test").cross(CrossVersion.full),
+      ("com.lihaoyi" % "ammonite" % "2.2.0" % "test").cross(CrossVersion.full),
 
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion),
 

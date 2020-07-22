@@ -202,6 +202,9 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     ) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
+    //A CompactionFilter allows an application to modify/delete a key-value at the time of compaction
+    //.setCompactionFilter(???)
+    //.setCompactionFilterFactory(AbstractCompactionFilterFactory)}
 
     //By default a hash of every whole key is added to the bloom filter. This can be disabled by setting BlockBasedTableOptions::whole_key_filtering to false
     //.setTableFormatConfig(new BlockBasedTableConfig().setWholeKeyFiltering(false))
@@ -258,7 +261,11 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
         //txn.getIterator(new ReadOptions().setSnapshot(snapshot))
 
-        //get multiple keys txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
+        //get multiple keys
+
+        //txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
+
+
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
         //WRITE sell if some left

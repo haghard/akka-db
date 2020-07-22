@@ -60,6 +60,12 @@ https://www.cockroachlabs.com/blog/cockroachdb-on-rocksd/
 
 https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-value-storage/
 
+
+https://github.com/facebook/rocksdb/wiki/Talks
+
+[RocksDB meetup] Anthony Giardullo, Facebook – RocksDB Transactions
+https://www.youtube.com/watch?v=tMeon8FHF3I
+
 ### Next Steps
 
 To build a db with snapshot isolation and causal consistency to get referential integrity
