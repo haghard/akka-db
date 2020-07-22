@@ -181,6 +181,8 @@ incoming events, or via the Process Manager pattern.
 */
 
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
+
+//MVCC simply means that you don't override a value when you write the same key twice
 final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
   val ser       = SerializationExtension(context.system)
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
@@ -229,9 +231,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     log.info("DB file path: {}", dbPath)
 
     receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
-
-
-
+    
     MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
       iter.seekToFirst
       while (iter.isValid) {
@@ -267,11 +267,9 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         //if at least one key from that set of keys was modified between multiGetForUpdate, put|merge and commit,
         //we get RocksDBException with Status.Code.Busy
 
-
         //get multiple keys
 
         //txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
-
 
         val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
