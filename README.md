@@ -63,6 +63,14 @@ https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-
 
 https://github.com/facebook/rocksdb/wiki/Talks
 
+
+
+MultiGetForUpdate example: 
+
+https://github.com/facebook/rocksdb/blob/189f0c27aaecdf17ae7fc1f826a423a28b77984f/java/src/test/java/org/rocksdb/OptimisticTransactionTest.java#L96
+
+
+
 [RocksDB meetup] Anthony Giardullo, Facebook – RocksDB Transactions
 https://www.youtube.com/watch?v=tMeon8FHF3I
 
