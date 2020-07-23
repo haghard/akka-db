@@ -44,6 +44,12 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
 https://github.com/lmdbjava/lmdbjava
 
 
+Apart from transactions, RockDb already has some features that helps you to deal with concurrency
+ 1. Atomic batch writes (50 keys at once)
+ 2. Snapshot reads
+ 3. Merge operations (read/modify/update scenarios by key)
+
+
 https://rocksdb.org/blog/
 
 https://www.youtube.com/watch?v=aKAJMd0iKtI
