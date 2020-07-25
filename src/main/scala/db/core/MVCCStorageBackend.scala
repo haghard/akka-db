@@ -200,7 +200,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     .setMaxSubcompactions(10)
     .setMaxBackgroundJobs(3)
     .setMergeOperator(
-      new org.rocksdb.StringAppendOperator(SEPARATOR)
+      new org.rocksdb.StringAppendOperator(SEPARATOR) //why? Allows for read/modify/write scenarios. Works in combination with txn.merge
     ) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
@@ -231,7 +231,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     log.info("DB file path: {}", dbPath)
 
     receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
-    
+
     MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
       iter.seekToFirst
       while (iter.isValid) {
