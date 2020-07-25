@@ -62,9 +62,15 @@ https://rockset.com/blog/index-scan-using-rocksets-search-index-to-speed-up-rang
 
 https://rockset.com/blog/how-we-use-rocksdb-at-rockset/
 
-https://www.cockroachlabs.com/blog/cockroachdb-on-rocksd/
 
+
+
+### Mapping Table Data to Key-Value Storage
+
+https://www.cockroachlabs.com/blog/cockroachdb-on-rocksd/
 https://www.cockroachlabs.com/blog/sql-in-cockroachdb-mapping-table-data-to-key-value-storage/
+https://github.com/cockroachdb/cockroach/blob/master/docs/tech-notes/encoding.md
+
 
 
 https://github.com/facebook/rocksdb/wiki/Talks

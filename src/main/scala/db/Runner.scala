@@ -117,12 +117,10 @@ object Runner extends App {
 
   Helpers.waitForAllNodesUp(as.toClassic, bs.toClassic, gs.toClassic)
 
-
   Helpers.wait(10.second)
   println("★ ★ ★  gamma partitioned ★ ★ ★")
   //gamma.leave(gamma.selfAddress)
   gs.terminate
-
 
   Helpers.wait(20.second)
   println("★ ★ ★  betta partitioned  ★ ★ ★")

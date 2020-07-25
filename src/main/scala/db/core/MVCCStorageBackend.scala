@@ -20,7 +20,6 @@ import scala.concurrent.Future
 import scala.util.Try
 import scala.util.control.NonFatal
 
-
 /*
 
 Sources:
@@ -68,9 +67,9 @@ Will be translated into: Scan(/test/10/, /test/10/Ω)
 
 
 RocksDB supports
-* scans over a range [start, end)
-* delete a range over [start,end),
-* bulk ingest a set of keys and values
+ * scans over a range [start, end)
+ * delete a range over [start,end),
+ * bulk ingest a set of keys and values
 
 
 A feature "Prefix bloom filter", allows the bloom filter to be constructed on a prefix of a key.
@@ -98,7 +97,7 @@ blooms are only used for point lookups.
 https://github.com/facebook/rocksdb/wiki/Prefix-Seek#configure-prefix-bloom-filter
 new ReadOptions().setTotalOrderSeek(true)
 
-*/
+ */
 
 object MVCCStorageBackend {
   val ticketsNum = 200
@@ -178,13 +177,13 @@ The most common way to implement causal consistency in an Akka-based actor model
 incoming events, or via the Process Manager pattern.
 
 
-*/
+ */
 
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
 
 //MVCC simply means that you don't override a value when you write the same key twice
 final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
-  val ser       = SerializationExtension(context.system)
+  val ser         = SerializationExtension(context.system)
   implicit val ec = context.system.dispatchers.lookup("akka.db-io")
 
   val SEPARATOR = ';'
@@ -199,24 +198,25 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     .setMaxWriteBufferNumber(3)
     .setMaxSubcompactions(10)
     .setMaxBackgroundJobs(3)
+    //https://github.com/facebook/rocksdb/wiki/Merge-Operator
+    //why? Allows for Atomic Read-Modify-Write scenario. Works in combination with txn.merge
     .setMergeOperator(
-      new org.rocksdb.StringAppendOperator(SEPARATOR) //why? Allows for read/modify/write scenarios. Works in combination with txn.merge
-    ) //new CassandraValueMergeOperator() didn't work. TODO: Try with new version
+      //new org.rocksdb.CassandraValueMergeOperator(5000) TODO: Try with new version
+      new org.rocksdb.StringAppendOperator(SEPARATOR)
+    ) //new CassandraValueMergeOperator() didn't work.
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
-    //A CompactionFilter allows an application to modify/delete a key-value at the time of compaction
-    //.setCompactionFilter(???)
-    //.setCompactionFilterFactory(AbstractCompactionFilterFactory)}
+  //A CompactionFilter allows an application to modify/delete a key-value at the time of compaction
+  //.setCompactionFilter(???)
+  //.setCompactionFilterFactory(AbstractCompactionFilterFactory)}
 
-    //By default a hash of every whole key is added to the bloom filter. This can be disabled by setting BlockBasedTableOptions::whole_key_filtering to false
-    //.setTableFormatConfig(new BlockBasedTableConfig().setWholeKeyFiltering(false))
-    // Define a prefix. In this way, a fixed length prefix extractor. A recommended one to use.
-    //.useFixedLengthPrefixExtractor(3)
-
+  //By default a hash of every whole key is added to the bloom filter. This can be disabled by setting BlockBasedTableOptions::whole_key_filtering to false
+  //.setTableFormatConfig(new BlockBasedTableConfig().setWholeKeyFiltering(false))
+  // Define a prefix. In this way, a fixed length prefix extractor. A recommended one to use.
+  //.useFixedLengthPrefixExtractor(3)
 
   //Putting read_options.total_order_seek = true will make sure the query returns the same result as if there is no prefix bloom filter.
   //new ReadOptions().setTotalOrderSeek(false)
-
 
   val txnDbOptions = new TransactionDBOptions()
   val writeOptions = new WriteOptions()
@@ -271,7 +271,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
         //txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
 
-        val sales    = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
+        val sales = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
         //WRITE sell if some left
         if (sales.size < ticketsNum) {

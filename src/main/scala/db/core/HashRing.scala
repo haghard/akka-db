@@ -79,7 +79,9 @@ object HashRing {
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
 
         //idempotent add
-        rs.foreach(r ⇒ if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address)))
+        rs.foreach(r ⇒
+          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address))
+        )
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
           if (ref.path.address.host.isEmpty)
@@ -93,9 +95,9 @@ object HashRing {
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
-        val voucher            = voucherKeys(ThreadLocalRandom.current.nextInt() % voucherKeys.size)
-        val replicas           = Try(hash.memberFor(voucher, replicaId)).getOrElse(Set.empty)
-        val storageForReplica  = replicas.map(r ⇒ storages.get(r.addr)).flatten
+        val voucher           = voucherKeys(ThreadLocalRandom.current.nextInt() % voucherKeys.size)
+        val replicas          = Try(hash.memberFor(voucher, replicaId)).getOrElse(Set.empty)
+        val storageForReplica = replicas.map(r ⇒ storages.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
         //TODO: this use case is not save because
