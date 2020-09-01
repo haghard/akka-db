@@ -250,7 +250,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
   def put(key: String, value: String, replyTo: ActorRef[ReservationReply]): ReservationReply =
     txn
-      .startTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
+      .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
         //Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
 

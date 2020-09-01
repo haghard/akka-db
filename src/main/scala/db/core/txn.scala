@@ -5,12 +5,26 @@ import org.rocksdb.{RocksDBException, Transaction}
 
 import scala.util.control.{NoStackTrace, NonFatal}
 
+/*
+
+Resource management: https://medium.com/@bszwej/composable-resource-management-in-scala-ce902bda48b2
+Loan pattern
+  def withSqsConsumer[T](resource: SqsConsumer)(handle: SqsConsumer => T): T =
+    try handle(resource) finally resource.close()
+
+  withSqsConsumer(new SqsConsumer{}) { consumer: SqsConsumer =>
+      consumer.poll
+  }
+
+  def withResource[R, T](resource: => R)(handle: R => T)(close: R => Unit): T =
+    try handle(resource) finally close(resource)
+*/
 object txn {
 
   final case class DBError(cause: RocksDBException) extends Exception(cause) with NoStackTrace
 
-  def startTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
-    f: T ⇒ Option[String]
+  def withTxn[T <: Transaction](txn: T, logger: LoggingAdapter)(
+    handle: T ⇒ Option[String]
   ): Either[Throwable, Option[String]] =
     /*
     def txnErrorHandler(
@@ -43,7 +57,7 @@ object txn {
      */
 
     try {
-      val key = f(txn)
+      val key = handle(txn)
       txn.commit()
       Right(key)
     } catch {
