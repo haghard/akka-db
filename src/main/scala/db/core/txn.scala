@@ -18,7 +18,7 @@ Loan pattern
 
   def withResource[R, T](resource: => R)(handle: R => T)(close: R => Unit): T =
     try handle(resource) finally close(resource)
-*/
+ */
 object txn {
 
   final case class DBError(cause: RocksDBException) extends Exception(cause) with NoStackTrace

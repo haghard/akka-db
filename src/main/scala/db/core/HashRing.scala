@@ -79,7 +79,9 @@ object HashRing {
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
 
         //idempotent add
-        rs.foreach(r ⇒ if (r.path.address.hasLocalScope) hash.add(Replica(selfAddress)) else hash.add(Replica(r.path.address)))
+        rs.foreach(r ⇒
+          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddress)) else hash.add(Replica(r.path.address))
+        )
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
           if (ref.path.address.host.isEmpty) //ref.path.address.hasLocalScope

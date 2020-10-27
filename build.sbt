@@ -3,6 +3,7 @@ import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
 
 val akkaVersion = "2.6.10"
+val prometheusClient = "0.8.1"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 
@@ -38,7 +39,11 @@ val `akka-db` = project
       //"com.github.mpilquist" %% "simulacrum" % "0.12.0",
 
       //com.rbmhtechnology" %% "eventuate-crdt" % "0.10",
-      
+
+      "io.prometheus" % "simpleclient"         % prometheusClient,
+      "io.prometheus" % "simpleclient_common"  % prometheusClient,
+      //"io.prometheus" % "simpleclient_hotspot" % prometheusClient,
+
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
       ("com.lihaoyi" % "ammonite" % "2.2.0" % "test").cross(CrossVersion.full),
 
