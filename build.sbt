@@ -2,7 +2,7 @@ import com.typesafe.sbt.SbtMultiJvm
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
 
-val akkaVersion = "2.6.8"
+val akkaVersion = "2.6.10"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
 
@@ -29,7 +29,6 @@ val `akka-db` = project
 
       //"org.rocksdb" % "rocksdbjni" % "6.2.2",
       "org.rocksdb" % "rocksdbjni" %  "6.10.2",  //Jun, 2020
-
 
       //https://github.com/fusesource/rocksdbjni
       //"org.fusesource" % "rocksdbjni" % "99-master-SNAPSHOT",

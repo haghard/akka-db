@@ -69,7 +69,7 @@ object HashRing {
   def running(
     hash: Rendezvous[Replica],
     storages: SortedMap[Address, ActorRef[MVCCStorageBackend.Protocol]],
-    selfAddr: Address,
+    selfAddress: Address,
     id: Long,
     replicaId: Int
   )(implicit ctx: ActorContext[Protocol], to: Timeout): Behavior[Protocol] =
@@ -79,17 +79,15 @@ object HashRing {
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
 
         //idempotent add
-        rs.foreach(r ⇒
-          if (r.path.address.hasLocalScope) hash.add(Replica(selfAddr)) else hash.add(Replica(r.path.address))
-        )
+        rs.foreach(r ⇒ if (r.path.address.hasLocalScope) hash.add(Replica(selfAddress)) else hash.add(Replica(r.path.address)))
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
-          if (ref.path.address.host.isEmpty)
-            acc + (selfAddr → ref)
+          if (ref.path.address.host.isEmpty) //ref.path.address.hasLocalScope
+            acc + (selfAddress → ref)
           else
             acc + (ref.path.address → ref)
         }
-        running(hash, replicas, selfAddr, id, replicaId)
+        running(hash, replicas, selfAddress, id, replicaId)
 
       case Write ⇒
         implicit val ec  = ctx.executionContext
