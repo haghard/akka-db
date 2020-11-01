@@ -101,7 +101,7 @@ https://www.youtube.com/watch?v=-v_1aJJujdg                      *
 
 
 Prescription that contains the reference to doctor, patent, pharmacy and medication.
-Invariants (statements that always stays true):
+Invariants (statements that always stay true):
 
 AP-compatible invariant: `Relative order`
 Referential integrity: a reference to doctor|patient|pharmacy|medication always linked to an existing object.
