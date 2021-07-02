@@ -73,7 +73,7 @@ scalariformPreferences := scalariformPreferences.value
 
 //test:run test:console
 Test / sourceGenerators += Def.task {
-  val file = (sourceManaged in Test).value / "amm.scala"
+  val file = (Test / sourceManaged).value / "amm.scala"
   IO.write(file, """object amm extends App { ammonite.Main().run() }""")
   Seq(file)
 }.taskValue
