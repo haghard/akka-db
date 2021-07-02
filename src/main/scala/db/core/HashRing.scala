@@ -8,7 +8,7 @@ import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.typed.{Cluster, SelfUp, Unsubscribe}
 import akka.util.Timeout
-import db.core.MVCCStorageBackend.{ReservationReply, Reserve}
+import db.core.MVCCStorageBackend.{Buy, ReservationReply}
 import db.hashing.Rendezvous
 
 import scala.collection.immutable.{SortedMap, TreeMap}
@@ -20,7 +20,7 @@ object HashRing {
 
   val Name = "replica"
 
-  val voucherKeys = Vector("alpha", "betta", "gamma", "delta")
+  val voucherKeys = Vector("alpha", "betta", "gamma" /*, "delta"*/ )
 
   sealed trait Protocol
 
@@ -34,10 +34,8 @@ object HashRing {
     Behaviors.setup { ctx ⇒
       ctx.log.info("{} Starting up replica", replicaId)
       val c = Cluster(ctx.system)
-      c.subscriptions ! akka.cluster.typed.Subscribe(
-        ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb },
-        classOf[SelfUp]
-      )
+      c.subscriptions ! akka.cluster.typed
+        .Subscribe(ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb }, classOf[SelfUp])
       selfUp(c, replicaId, rf)
     }
 
@@ -48,13 +46,13 @@ object HashRing {
       ctx.system.receptionist ! akka.actor.typed.receptionist.Receptionist.Subscribe(
         MVCCStorageBackend.Key,
         ctx.messageAdapter[akka.actor.typed.receptionist.Receptionist.Listing] {
-          case MVCCStorageBackend.Key.Listing(replicas) ⇒
-            MembershipChanged(replicas)
+          case MVCCStorageBackend.Key.Listing(replicas) ⇒ MembershipChanged(replicas)
         }
       )
 
       Behaviors.withTimers[Protocol] { timers ⇒
-        timers.startSingleTimer(Write, Write, 3000.millis)
+        timers.startTimerAtFixedRate(Write, 3000.millis)
+        //timers.startSingleTimer(Write, Write, 3000.millis)
 
         running(
           Rendezvous[Replica],
@@ -70,13 +68,13 @@ object HashRing {
     hash: Rendezvous[Replica],
     storages: SortedMap[Address, ActorRef[MVCCStorageBackend.Protocol]],
     selfAddress: Address,
-    id: Long,
-    replicaId: Int
+    replicaId: Long,
+    rf: Int
   )(implicit ctx: ActorContext[Protocol], to: Timeout): Behavior[Protocol] =
     Behaviors.receiveMessagePartial {
       case MembershipChanged(rs) ⇒
-        //TODO: handle it properly. You need to reconstruct the whole ring for the ground up
-        ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", id, rs.mkString(","))
+        //TODO: handle it properly. You need to reconstruct the whole ring from the ground up
+        ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", replicaId, rs.mkString(","))
 
         //idempotent add
         rs.foreach(r ⇒
@@ -84,19 +82,17 @@ object HashRing {
         )
 
         val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
-          if (ref.path.address.host.isEmpty) //ref.path.address.hasLocalScope
-            acc + (selfAddress → ref)
-          else
-            acc + (ref.path.address → ref)
+          if (ref.path.address.hasLocalScope) acc + (selfAddress → ref)
+          else acc + (ref.path.address                           → ref)
         }
-        running(hash, replicas, selfAddress, id, replicaId)
+        running(hash, replicas, selfAddress, replicaId, rf)
 
       case Write ⇒
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
-        val voucher           = voucherKeys(ThreadLocalRandom.current.nextInt() % voucherKeys.size)
-        val replicas          = Try(hash.memberFor(voucher, replicaId)).getOrElse(Set.empty)
+        val voucher           = voucherKeys(ThreadLocalRandom.current.nextInt(0, voucherKeys.size))
+        val replicas          = Try(hash.memberFor(voucher, rf)).getOrElse(Set.empty)
         val storageForReplica = replicas.map(r ⇒ storages.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
@@ -105,17 +101,28 @@ object HashRing {
         // If N concurrent clients hit the same key at the same time on different replicas, different winners are possible.
 
         Future
-          .traverse(storageForReplica.toVector) { storage ⇒
-            storage.ask[ReservationReply](Reserve(voucher, System.nanoTime.toString, _))
+          .traverse(storageForReplica.toVector) { replica ⇒
+            replica.ask[ReservationReply](Buy(voucher, System.nanoTime.toString, _))
           }
-          .transform { r ⇒
-            r.map { replies ⇒
-              //if ReservationReply.Failure(key, _, replyTo) retry
-              //else if ReservationReply.Success next
-              //else if ReservationReply.Closed stop
+
+        /*f.transform { r ⇒
+          r.map { replies ⇒
+            //if ReservationReply.Failure(key, _, replyTo) retry
+            //else if ReservationReply.Success next
+            //else if ReservationReply.Closed stop
+          }
+          r
+        }*/
+
+        /*ctx.pipeToSelf(f) {
+          case Success(reply) =>
+            reply match {
+              case ReservationReply.Success ⇒
+              case ReservationReply.Failure ⇒
+              case ReservationReply.Closed ⇒
             }
-            r
-          }
+          case Failure(err) => ???
+        }*/
 
         /*.onComplete {
             case Success(_) ⇒

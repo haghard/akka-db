@@ -17,11 +17,13 @@ https://fauna.com/blog/a-comparison-of-scalable-database-isolation-levels
 https://github.com/justin-db/JustinDB
 
 
+
 #Akka-cluster split brain
 https://github.com/TanUkkii007/akka-cluster-custom-downing
 https://scalac.io/split-brain-scenarios-with-akka-scala/
 https://doc.akka.io/docs/akka/2.5.22/typed/actor-discovery.html
-Lithium 
+
+### Lithium 
 https://www.reddit.com/r/scala/comments/evpv5m/lithium_a_splitbrain_resolver_for_akkacluster/
 https://speakerdeck.com/dennisvdb/lithium-a-split-brain-resolver-for-akka-cluster 
 
@@ -44,10 +46,13 @@ https://github.com/facebook/rocksdb/blob/a283800616cb5da5da43d878037e6398cccf909
 https://github.com/lmdbjava/lmdbjava
 
 
-Apart from transactions, RockDb already has some features that helps you to deal with concurrency
+RockDb has some features that helps you to deal with concurrency
  1. Atomic batch writes (50 keys at once)
  2. Snapshot reads
  3. Merge operations (read/modify/update scenarios by key)
+ 4. scans over a range [start, end)
+ 5. delete a range over [start,end),
+ 6. bulk ingest a set of keys and values
 
 
 https://rocksdb.org/blog/

@@ -12,13 +12,15 @@ import akka.cluster.Cluster
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
 import akka.serialization.SerializationExtension
-import db.core.MVCCStorageBackend.{ReservationReply, Reserve, _}
+import db.core.MVCCStorageBackend.{ReservationReply, Buy, _}
 import org.rocksdb.{Options, _}
 import org.rocksdb.util.SizeUnit
 
 import scala.concurrent.Future
 import scala.util.Try
 import scala.util.control.NonFatal
+
+import akka.actor.typed.receptionist.Receptionist
 
 /*
 
@@ -78,7 +80,6 @@ https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter
 https://github.com/facebook/rocksdb/wiki/RocksDB-Bloom-Filter#prefix-vs-whole-key
 
 
-
 We usually simply seek to a key using a smaller, shared prefix of the key.
 Therefore, we set BlockBasedTableOptions::whole_key_filtering to false
 so that whole keys are not used to populate and thereby pollute the bloom filters created for each SST.
@@ -103,11 +104,11 @@ object MVCCStorageBackend {
   val ticketsNum = 200
   val path       = "rocks-db"
 
-  val Key = ServiceKey[MVCCStorageBackend.Protocol]("StorageBackend")
+  val Key = ServiceKey[MVCCStorageBackend.Protocol]("StorageReplica")
 
   sealed trait Protocol
 
-  final case class Reserve(voucher: String, client: String, replyTo: ActorRef[ReservationReply]) extends Protocol
+  final case class Buy(voucher: String, client: String, replyTo: ActorRef[ReservationReply]) extends Protocol
 
   sealed trait ReservationReply {
     def key: String
@@ -127,7 +128,7 @@ object MVCCStorageBackend {
     } finally rocksIterator.close
 
   def props(receptionist: ActorRef[Receptionist.Command]) =
-    Props(new MVCCStorageBackend(receptionist)).withDispatcher("akka.db-io")
+    Props(new MVCCStorageBackend(receptionist)).withDispatcher(db.Runner.DBDispatcher)
 }
 
 /*
@@ -182,9 +183,11 @@ incoming events, or via the Process Manager pattern.
 //https://github.com/facebook/rocksdb/tree/master/java/src/main/java/org/rocksdb
 
 //MVCC simply means that you don't override a value when you write the same key twice
-final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
-  val ser         = SerializationExtension(context.system)
-  implicit val ec = context.system.dispatchers.lookup("akka.db-io")
+class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
+  org.rocksdb.RocksDB.loadLibrary()
+
+  //val SerExt         = SerializationExtension(context.system)
+  implicit val ec = context.system.dispatchers.lookup(db.Runner.DBDispatcher)
 
   val SEPARATOR = ';'
   val cluster   = Cluster(context.system)
@@ -192,8 +195,41 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
 
   //BlockBasedTableOptions::whole_key_filtering to false
 
+  /*
+  https://github.com/facebook/rocksdb/blob/2655477c679aecf4a5555af7e2cc9e988813f197/java/benchmark/src/main/java/org/rocksdb/benchmark/DbBenchmark.java#L489
+  switch (memtable_) {
+      case "skip_list":
+        options.setMemTableConfig(new SkipListMemTableConfig());
+        break;
+      case "vector":
+        options.setMemTableConfig(new VectorMemTableConfig());
+        break;
+      case "hash_linkedlist":
+        options.setMemTableConfig(new HashLinkedListMemTableConfig().setBucketCount(hashBucketCount_));
+        options.useFixedLengthPrefixExtractor(prefixSize_);
+        break;
+      case "hash_skiplist":
+      case "prefix_hash":
+        options.setMemTableConfig(
+            new HashSkipListMemTableConfig()
+                .setBucketCount(hashBucketCount_));
+        options.useFixedLengthPrefixExtractor(prefixSize_);
+        break;
+      default:
+        System.err.format(
+            "unable to detect the specified memtable, " +
+                "use the default memtable factory %s%n",
+            options.memTableFactoryName());
+        break;
+    }
+   */
+
   val options = new Options()
     .setCreateIfMissing(true)
+    .setMemTableConfig(new SkipListMemTableConfig())
+    //.setMemTableConfig(new VectorMemTableConfig())
+    //.setMemTableConfig(new HashLinkedListMemTableConfig().setBucketCount(1024))
+    .useFixedLengthPrefixExtractor(8)
     .setWriteBufferSize(10 * SizeUnit.KB)
     .setMaxWriteBufferNumber(3)
     .setMaxSubcompactions(10)
@@ -201,7 +237,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     //https://github.com/facebook/rocksdb/wiki/Merge-Operator
     //why? Allows for Atomic Read-Modify-Write scenario. Works in combination with txn.merge
     .setMergeOperator(
-      //new org.rocksdb.CassandraValueMergeOperator(5000) TODO: Try with new version
+      //new org.rocksdb.CassandraValueMergeOperator(5000) //TODO: Try with new version
       new org.rocksdb.StringAppendOperator(SEPARATOR)
     ) //new CassandraValueMergeOperator() didn't work.
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
@@ -225,19 +261,21 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
     TransactionDB.open(options, txnDbOptions, dbPath)
 
   override def preStart(): Unit = {
-    Files.createDirectory(Paths.get(s"./$path"))
-    org.rocksdb.RocksDB.loadLibrary()
+    val p = Paths.get(s"./$path")
+    if (!p.toFile.exists())
+      Files.createDirectory(p)
 
-    log.info("DB file path: {}", dbPath)
+    //SkipListMemTableConfig
+    log.info("------- DB file path: {} memTable: {} ", dbPath, options.memTableConfig().getClass.getSimpleName)
 
-    receptionist ! akka.actor.typed.receptionist.Receptionist.Register(MVCCStorageBackend.Key, self)
+    receptionist ! Receptionist.Register(MVCCStorageBackend.Key, self)
 
     MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
       iter.seekToFirst
       while (iter.isValid) {
         val key   = new String(iter.key, UTF_8)
         val sales = new String(iter.value, UTF_8).split(SEPARATOR)
-        log.info("{} [{}:{}]", cluster.selfAddress.port.get, key, sales.size)
+        log.info("Load: {} [{}:{}]", cluster.selfAddress.port.get, key, sales.size)
         iter.next
       }
     }
@@ -254,6 +292,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
         //Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
 
+        log.warning("Put: {}:{}", key, value)
         val snapshot = txn.getSnapshot
         val keyBytes = key.getBytes(UTF_8)
 
@@ -286,7 +325,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
       )
 
   def write: Receive = {
-    case Reserve(key, value, replyTo) ⇒
+    case Buy(key, value, replyTo) ⇒
       Future(put(key, value, replyTo)).mapTo[ReservationReply].pipeTo(self)
     case r: ReservationReply ⇒
       r match {
@@ -300,8 +339,7 @@ final class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) ext
   }
 
   override def receive: Receive =
-    write /*orElse read*/ orElse {
-      case scala.util.Failure(ex) ⇒
-        log.error(ex, "Unexpected error")
+    write /*orElse read*/ orElse { case scala.util.Failure(ex) ⇒
+      log.error(ex, "Unexpected PUT error")
     }
 }

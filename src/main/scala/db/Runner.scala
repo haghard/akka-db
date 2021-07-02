@@ -12,7 +12,8 @@ import scala.concurrent.duration._
 //runMain db.Runner
 object Runner extends App {
 
-  val systemName = "db"
+  val systemName   = "db"
+  val DBDispatcher = "akka.db-io"
 
   val config = ConfigFactory.parseString(
     s"""
@@ -40,8 +41,13 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, 0L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 0L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
+
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
+          //.toTyped[MVCCStorageBackend.ReservationReply]
+
+          //Behaviors.supervise(storage).onFailure[Exception](SupervisorStrategy.resume.withLoggingEnabled(true))
+
           ctx.watch(replica)
 
           Behaviors.receiveSignal {
@@ -65,15 +71,14 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, 1L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 1L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
           ctx.watch(replica)
 
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
-          Behaviors.receiveSignal {
-            case (_, Terminated(`replica`)) ⇒
-              ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
-              Behaviors.stopped
+          Behaviors.receiveSignal { case (_, Terminated(`replica`)) ⇒
+            ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
+            Behaviors.stopped
           }
         }
         .narrow,
@@ -86,15 +91,14 @@ object Runner extends App {
       //guardian
       Behaviors
         .setup[Unit] { ctx ⇒
-          val replica = ctx.spawn(HashRing(RF, 2L), HashRing.Name, DispatcherSelector.fromConfig("akka.db-io"))
+          val replica = ctx.spawn(HashRing(RF, 2L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
           ctx.watch(replica)
 
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
-          Behaviors.receiveSignal {
-            case (_, Terminated(`replica`)) ⇒
-              ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
-              Behaviors.stopped
+          Behaviors.receiveSignal { case (_, Terminated(`replica`)) ⇒
+            ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
+            Behaviors.stopped
           }
         }
         .narrow,
@@ -117,18 +121,27 @@ object Runner extends App {
 
   Helpers.waitForAllNodesUp(as.toClassic, bs.toClassic, gs.toClassic)
 
-  Helpers.wait(10.second)
+  Helpers.wait(60.second)
+  gamma.leave(gamma.selfAddress)
+  gs.terminate
+  betta.leave(betta.selfAddress)
+  bs.terminate
+  alpha.leave(alpha.selfAddress)
+  as.terminate
+
+  /*
+  Helpers.wait(60.second)
   println("★ ★ ★  gamma partitioned ★ ★ ★")
   //gamma.leave(gamma.selfAddress)
   gs.terminate
 
-  Helpers.wait(20.second)
+  Helpers.wait(10.second)
   println("★ ★ ★  betta partitioned  ★ ★ ★")
   //betta.leave(betta.selfAddress)
   bs.terminate
 
-  Helpers.wait(30.second)
-
+  Helpers.wait(10.second)
   alpha.leave(alpha.selfAddress)
   as.terminate
+   */
 }

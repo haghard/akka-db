@@ -18,8 +18,7 @@ object VersionVector {
   case object Same       extends Ordering
   case object Concurrent extends Ordering
 
-  /**
-    * Marker to ensure that we do a full order comparison instead of bailing out early.
+  /** Marker to ensure that we do a full order comparison instead of bailing out early.
     */
   private case object FullOrder extends Ordering
 
@@ -30,48 +29,39 @@ object VersionVector {
 trait VersionVectorLike[T] {
   type VV <: VersionVectorLike[T]
 
-  /**
-    * Increment the version for the node passed as argument. Returns a new VersionVector.
+  /** Increment the version for the node passed as argument. Returns a new VersionVector.
     */
   def +(node: T): VV = increment(node)
 
-  /**
-    * Increment the version for the node passed as argument. Returns a new VersionVector.
+  /** Increment the version for the node passed as argument. Returns a new VersionVector.
     */
   protected def increment(node: T): VV
 
-  /**
-    * Returns the local view on the logical clock of the given node.
+  /** Returns the local view on the logical clock of the given node.
     */
   def version(node: T): Long
 
-  /**
-    * Returns true if <code>this</code> and <code>that</code> are concurrent else false.
+  /** Returns true if <code>this</code> and <code>that</code> are concurrent else false.
     */
   def <>(that: VV): Boolean
 
-  /**
-    * Returns true if <code>this</code> is before <code>that</code> else false.
+  /** Returns true if <code>this</code> is before <code>that</code> else false.
     */
   def <(that: VV): Boolean
 
-  /**
-    * Returns true if <code>this</code> is after <code>that</code> else false.
+  /** Returns true if <code>this</code> is after <code>that</code> else false.
     */
   def >(that: VV): Boolean
 
-  /**
-    * Returns true if this VersionVector has the same history as the 'that' VersionVector else false.
+  /** Returns true if this VersionVector has the same history as the 'that' VersionVector else false.
     */
   def ==(that: VV): Boolean
 
-  /**
-    * Computes the union of the nodes and maintains the highest clock value found for each
+  /** Computes the union of the nodes and maintains the highest clock value found for each
     */
   def merge(that: VV): VV
 
-  /**
-    * Returns the number of nodes registered in this version vector
+  /** Returns the number of nodes registered in this version vector
     */
   protected def size: Int
 }
@@ -83,39 +73,32 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
 
   private val ord = implicitly[scala.Ordering[T]]
 
-  /**
-    * Increment the version for the node passed as argument. Returns a new VersionVector.
+  /** Increment the version for the node passed as argument. Returns a new VersionVector.
     */
   override protected def increment(node: T): VersionVector[T] =
     VersionVector(elems.updated(node, nodeClock(node) + 1L))
 
-  /**
-    * Returns the local view on the logical clock of the given node.
+  /** Returns the local view on the logical clock of the given node.
     */
   override def version(node: T): Long = nodeClock(node)
 
-  /**
-    * Returns true if <code>this</code> and <code>that</code> are concurrent else false.
+  /** Returns true if <code>this</code> and <code>that</code> are concurrent else false.
     */
   def <>(that: VersionVector[T]): Boolean = compareOnlyTo(that, Concurrent) eq Concurrent
 
-  /**
-    * Returns true if <code>this</code> is before <code>that</code> else false.
+  /** Returns true if <code>this</code> is before <code>that</code> else false.
     */
   def <(that: VersionVector[T]): Boolean = compareOnlyTo(that, Before) eq Before
 
-  /**
-    * Returns true if <code>this</code> is after <code>that</code> else false.
+  /** Returns true if <code>this</code> is after <code>that</code> else false.
     */
   def >(that: VersionVector[T]): Boolean = compareOnlyTo(that, After) eq After
 
-  /**
-    * Returns true if this VersionVector has the same history as the 'that' VersionVector else false.
+  /** Returns true if this VersionVector has the same history as the 'that' VersionVector else false.
     */
   def ==(that: VersionVector[T]): Boolean = compareOnlyTo(that, Same) eq Same
 
-  /**
-    * Version vector comparison according to the semantics described by compareTo, with the ability to bail
+  /** Version vector comparison according to the semantics described by compareTo, with the ability to bail
     * out early if the we can't reach the Ordering that we are looking for.
     *
     * The ordering always starts with Same and can then go to Same, Before or After
@@ -174,8 +157,7 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
     else compare(this.elems.view.toSeq, that.elems.view.toSeq, Same)
   }
 
-  /**
-    * Computes the union of the nodes and maintains the highest clock value found for each
+  /** Computes the union of the nodes and maintains the highest clock value found for each
     */
   override def merge(that: VersionVector[T]): VersionVector[T] = {
 
@@ -205,8 +187,7 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
     VersionVector(newEntries)
   }
 
-  /**
-    * Returns the number of nodes registered in this version vector
+  /** Returns the number of nodes registered in this version vector
     */
   override protected lazy val size: Int = elems.size
 

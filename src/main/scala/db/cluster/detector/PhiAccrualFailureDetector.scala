@@ -12,9 +12,8 @@ object PhiAccrualFailureDetector {
     val timestampsSorted = timestamps.sorted
     val first            = timestampsSorted.head
     val diffs = timestampsSorted
-      .foldLeft((Vector.empty[Long], first)) {
-        case ((deltas, last), next) ⇒
-          (deltas :+ (next - last), next)
+      .foldLeft((Vector.empty[Long], first)) { case ((deltas, last), next) ⇒
+        (deltas :+ (next - last), next)
       }
       ._1
       .sorted
@@ -29,9 +28,8 @@ object PhiAccrualFailureDetector {
 case class PhiAccrualFailureDetector(timestamps: IndexedSeq[Long])(implicit clock: PhiAccrualFailureDetector.Clock) {
 
   val intervals = timestamps
-    .foldLeft((Vector.empty[Long], timestamps.head)) {
-      case ((deltas, last), next) ⇒
-        (deltas :+ (next - last), next)
+    .foldLeft((Vector.empty[Long], timestamps.head)) { case ((deltas, last), next) ⇒
+      (deltas :+ (next - last), next)
     }
     ._1
     .sorted
@@ -56,16 +54,14 @@ case class PhiAccrualFailureDetector(timestamps: IndexedSeq[Long])(implicit cloc
 
   private def ensureValidStdDeviation(stdDeviation: Double): Double = math.max(stdDeviation, minStdDeviationMillis)
 
-  /**
-    * The suspicion level of the accrual failure detector.
+  /** The suspicion level of the accrual failure detector.
     *
     * If a connection does not have any records in failure detector then it is
     * considered healthy.
     */
   def phi: Double = phi(clock())
 
-  /**
-    * Calculation of phi, derived from the Cumulative distribution function for
+  /** Calculation of phi, derived from the Cumulative distribution function for
     * N(mean, stdDeviation) normal distribution, given by
     * 1.0 / (1.0 + math.exp(-y * (1.5976 + 0.070566 * y * y)))
     * where y = (x - mean) / standard_deviation
