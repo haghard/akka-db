@@ -126,12 +126,11 @@ object Runner extends App {
 
   /*
     4 keys means the tree with contain 6 hashes
-
-                0
-        +----------------+
-        |                |
-     -- 1 --          -- 4 --
-   2(h1)| 3(h2)     5(h3)  6(h4)
+         _____1_____
+        /           \
+     __2__         __6__
+    /     \       /     \
+ 3(h1)   4(h2)  7(h3)   8(h4)
 
   */
   val tree1 = MerkleTree.fromArrays(blocks)(MerkleDigest.CRC32).get
@@ -168,7 +167,7 @@ object Runner extends App {
 
 /*
 it should "have the same top hash" in {
-    val blocks: Seq[Block] = Seq(
+    val blocks: Seq[Block] = Seq(                                                                      
       Array[Byte](1,2,3),
       Array[Byte](4,5,6),
       Array[Byte](7,8,9),
