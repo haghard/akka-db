@@ -4,18 +4,20 @@ package object ds {
 
   type Block = Array[Byte]
 
-  final case class Digest(hash: Array[Byte]) extends AnyVal { self =>
+  final case class Digest(hash: Array[Byte]) extends AnyVal { self ⇒
 
     def ++(that: Digest) = Digest(self.hash ++ that.hash)
 
     private def hex2bytes(hex: String): Array[Byte] =
       hex
-        .replaceAll("[^0-9A-Fa-f]", "").sliding(2, 2)
-        .toArray.map(Integer.parseInt(_, 16).toByte)
+        .replaceAll("[^0-9A-Fa-f]", "")
+        .sliding(2, 2)
+        .toArray
+        .map(Integer.parseInt(_, 16).toByte)
 
     private def bytes2Hex(bytes: Array[Byte]): String = {
       val sb = new StringBuilder
-      bytes.foreach(b => sb.append(String.format("%02X", b: java.lang.Byte)))
+      bytes.foreach(b ⇒ sb.append(String.format("%02X", b: java.lang.Byte)))
       sb.toString
     }
 

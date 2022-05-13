@@ -80,7 +80,7 @@ object MerkleTree {
     Array.fill(zero(blocks.length))(Array[Byte](0))
   }
 
-  @tailrec def nodeById(nodeId: NodeId, merkleTree: MerkleTree): Option[MerkleTree] = {
+  @tailrec def nodeById(nodeId: NodeId, merkleTree: MerkleTree): Option[MerkleTree] =
     if (merkleTree.nodeId == nodeId) Some(merkleTree)
     else
       merkleTree match {
@@ -88,7 +88,6 @@ object MerkleTree {
           if (nodeId.v >= right.nodeId.v) nodeById(nodeId, right) else nodeById(nodeId, left)
         case _ ⇒ None
       }
-  }
 
 }
 
@@ -99,7 +98,7 @@ object Runner extends App {
     Array[Byte](1, 2, 3),
     Array[Byte](4, 5, 6),
     Array[Byte](7, 8, 9),
-    Array[Byte](10, 11, 12),
+    Array[Byte](10, 11, 12)
     //Array[Byte](20, 21, 22)
     //Array[Byte](30, 31, 32),
     //Array[Byte](40, 41, 42),
@@ -109,7 +108,7 @@ object Runner extends App {
     Array[Byte](1, 2, 3),
     Array[Byte](4, 5, 6),
     Array[Byte](7, 8, 9),
-    Array[Byte](10, 11, 121),
+    Array[Byte](10, 11, 121)
     //Array[Byte](20, 21, 23)
     //Array[Byte](30, 31, 32),
     //Array[Byte](40, 41, 42),
@@ -132,25 +131,24 @@ object Runner extends App {
     /     \       /     \
  3(h1)   4(h2)  7(h3)   8(h4)
 
-  */
+   */
   val tree1 = MerkleTree.fromArrays(blocks)(MerkleDigest.CRC32).get
   val tree2 = MerkleTree.fromArrays(blocks2)(MerkleDigest.CRC32).get
   println(tree1)
   println(tree2)
 
   val one = NodeId(1)
-  val a = MerkleTree.nodeById(one, tree1).get.digest
-  val b = MerkleTree.nodeById(one, tree2).get.digest
+  val a   = MerkleTree.nodeById(one, tree1).get.digest
+  val b   = MerkleTree.nodeById(one, tree2).get.digest
 
   //println(a.toString)
   //println(b.toString)
   println(java.util.Arrays.equals(a.hash, b.hash))
 
   val two = NodeId(6)
-  val c = MerkleTree.nodeById(two, tree1).get.digest
-  val d = MerkleTree.nodeById(two, tree2).get.digest
+  val c   = MerkleTree.nodeById(two, tree1).get.digest
+  val d   = MerkleTree.nodeById(two, tree2).get.digest
   println(java.util.Arrays.equals(c.hash, d.hash))
-
 
   val digest1 = tree1.digest
   val digest2 = tree2.digest
@@ -167,7 +165,7 @@ object Runner extends App {
 
 /*
 it should "have the same top hash" in {
-    val blocks: Seq[Block] = Seq(                                                                      
+    val blocks: Seq[Block] = Seq(
       Array[Byte](1,2,3),
       Array[Byte](4,5,6),
       Array[Byte](7,8,9),
