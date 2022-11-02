@@ -2,7 +2,7 @@ import com.typesafe.sbt.SbtMultiJvm
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import sbt.CrossVersion
 
-val akkaVersion = "2.6.19"
+val akkaVersion = "2.6.20"
 val prometheusClient = "0.8.1"
 
 resolvers += Resolver.sonatypeRepo("snapshots")
