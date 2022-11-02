@@ -5,7 +5,8 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.actor.typed._
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import db.core.{HashRing, MVCCStorageBackend}
+import db.core.{HashRing, MVCCStorageBackend, Replica}
+import db.hashing.Rendezvous
 
 import scala.concurrent.duration._
 
@@ -38,25 +39,25 @@ object Runner extends App {
 
   def alphaSys: ActorSystem[Nothing] =
     ActorSystem[Nothing](
-      //guardian
+      // guardian
       Behaviors
-        .setup[Unit] { ctx ⇒
+        .setup[Unit] { ctx =>
           val replica = ctx.spawn(HashRing(RF, 0L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
 
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
-          //.toTyped[MVCCStorageBackend.ReservationReply]
+          // .toTyped[MVCCStorageBackend.ReservationReply]
 
-          //Behaviors.supervise(storage).onFailure[Exception](SupervisorStrategy.resume.withLoggingEnabled(true))
+          // Behaviors.supervise(storage).onFailure[Exception](SupervisorStrategy.resume.withLoggingEnabled(true))
 
           ctx.watch(replica)
 
           Behaviors.receiveSignal {
-            case (_, PostStop) ⇒
+            case (_, PostStop) =>
               Behaviors.same
-            case (_, ChildFailed((replica, cause))) ⇒
+            case (_, ChildFailed((replica, cause))) =>
               ctx.log.error(s"★ ★ ★ ★ ★ ★  Replica 0: ChildFailed $replica", cause)
               Behaviors.same
-            case (_, Terminated(`replica`)) ⇒
+            case (_, Terminated(`replica`)) =>
               ctx.log.error("★ ★ ★ ★ ★ ★  Replica 0: Failure detected")
               Behaviors.stopped
           }
@@ -68,15 +69,15 @@ object Runner extends App {
 
   def bettaSys: ActorSystem[Nothing] =
     ActorSystem[Nothing](
-      //guardian
+      // guardian
       Behaviors
-        .setup[Unit] { ctx ⇒
+        .setup[Unit] { ctx =>
           val replica = ctx.spawn(HashRing(RF, 1L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
           ctx.watch(replica)
 
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
-          Behaviors.receiveSignal { case (_, Terminated(`replica`)) ⇒
+          Behaviors.receiveSignal { case (_, Terminated(`replica`)) =>
             ctx.log.error("★ ★ ★ ★ ★ ★  Replica 1: Failure detected")
             Behaviors.stopped
           }
@@ -88,15 +89,15 @@ object Runner extends App {
 
   def gammaSys: ActorSystem[Nothing] =
     ActorSystem[Nothing](
-      //guardian
+      // guardian
       Behaviors
-        .setup[Unit] { ctx ⇒
+        .setup[Unit] { ctx =>
           val replica = ctx.spawn(HashRing(RF, 2L), HashRing.Name, DispatcherSelector.fromConfig(DBDispatcher))
           ctx.watch(replica)
 
           ctx.actorOf(MVCCStorageBackend.props(ctx.system.receptionist), "sb")
 
-          Behaviors.receiveSignal { case (_, Terminated(`replica`)) ⇒
+          Behaviors.receiveSignal { case (_, Terminated(`replica`)) =>
             ctx.log.error("★ ★ ★ ★ ★ ★  Replica 2: Failure detected")
             Behaviors.stopped
           }
@@ -121,11 +122,17 @@ object Runner extends App {
 
   Helpers.waitForAllNodesUp(as.toClassic, bs.toClassic, gs.toClassic)
 
-  Helpers.wait(60.second)
+  // Helpers.wait(60.second)
+
+  Thread.sleep(10000)
   gamma.leave(gamma.selfAddress)
   gs.terminate
+
+  Thread.sleep(10000)
   betta.leave(betta.selfAddress)
   bs.terminate
+
+  Thread.sleep(10000)
   alpha.leave(alpha.selfAddress)
   as.terminate
 

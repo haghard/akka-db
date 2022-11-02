@@ -12,7 +12,7 @@ import akka.cluster.Cluster
 import akka.event.LoggingAdapter
 import akka.pattern.pipe
 import akka.serialization.SerializationExtension
-import db.core.MVCCStorageBackend.{ReservationReply, Buy, _}
+import db.core.MVCCStorageBackend.{Buy, ReservationReply, _}
 import org.rocksdb.{Options, _}
 import org.rocksdb.util.SizeUnit
 
@@ -121,10 +121,10 @@ object MVCCStorageBackend {
     final case class Failure(key: String, err: Throwable, replyTo: ActorRef[ReservationReply]) extends ReservationReply
   }
 
-  def managedIter(rocksIterator: RocksIterator, log: LoggingAdapter)(f: RocksIterator ⇒ Unit) =
+  def managedIter(rocksIterator: RocksIterator, log: LoggingAdapter)(f: RocksIterator => Unit) =
     try f(rocksIterator)
     catch {
-      case NonFatal(ex) ⇒ log.error(ex, "RocksIterator error:")
+      case NonFatal(ex) => log.error(ex, "RocksIterator error:")
     } finally rocksIterator.close
 
   def props(receptionist: ActorRef[Receptionist.Command]) =
@@ -150,7 +150,7 @@ then T1 must abort.
 Example: Sell N vouchers without overselling.
 It's a CAP-sensitive invariant(req coordination. "Two way" communication)
 
-This is impossible to achieve in distributed env with SNAPSHOT ISOLATION on each replica.
+It is impossible to achieve in distributed env with SNAPSHOT ISOLATION on each replica.
 We need SERIALIZABLE (or LINEARIZABLE) isolation here.
 So this is just a toy example.
 
@@ -186,14 +186,14 @@ incoming events, or via the Process Manager pattern.
 class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends Actor with ActorLogging {
   org.rocksdb.RocksDB.loadLibrary()
 
-  //val SerExt         = SerializationExtension(context.system)
+  // val SerExt         = SerializationExtension(context.system)
   implicit val ec = context.system.dispatchers.lookup(db.Runner.DBDispatcher)
 
   val SEPARATOR = ';'
   val cluster   = Cluster(context.system)
   val dbPath    = new File(s"./$path/replica-${cluster.selfAddress.port.get}").getAbsolutePath
 
-  //BlockBasedTableOptions::whole_key_filtering to false
+  // BlockBasedTableOptions::whole_key_filtering to false
 
   /*
   https://github.com/facebook/rocksdb/blob/2655477c679aecf4a5555af7e2cc9e988813f197/java/benchmark/src/main/java/org/rocksdb/benchmark/DbBenchmark.java#L489
@@ -227,32 +227,32 @@ class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends A
   val options = new Options()
     .setCreateIfMissing(true)
     .setMemTableConfig(new SkipListMemTableConfig())
-    //.setMemTableConfig(new VectorMemTableConfig())
-    //.setMemTableConfig(new HashLinkedListMemTableConfig().setBucketCount(1024))
+    // .setMemTableConfig(new VectorMemTableConfig())
+    // .setMemTableConfig(new HashLinkedListMemTableConfig().setBucketCount(1024))
     .useFixedLengthPrefixExtractor(8)
     .setWriteBufferSize(10 * SizeUnit.KB)
     .setMaxWriteBufferNumber(3)
     .setMaxSubcompactions(10)
     .setMaxBackgroundJobs(3)
-    //https://github.com/facebook/rocksdb/wiki/Merge-Operator
-    //why? Allows for Atomic Read-Modify-Write scenario. Works in combination with txn.merge
+    // https://github.com/facebook/rocksdb/wiki/Merge-Operator
+    // why? Allows for Atomic Read-Modify-Write scenario. Works in combination with txn.merge
     .setMergeOperator(
-      //new org.rocksdb.CassandraValueMergeOperator(5000) //TODO: Try with new version
+      // new org.rocksdb.CassandraValueMergeOperator(5000) //TODO: Try with new version
       new org.rocksdb.StringAppendOperator(SEPARATOR)
-    ) //new CassandraValueMergeOperator() didn't work.
+    ) // new CassandraValueMergeOperator() didn't work.
     .setCompressionType(CompressionType.SNAPPY_COMPRESSION)
     .setCompactionStyle(CompactionStyle.UNIVERSAL)
-  //A CompactionFilter allows an application to modify/delete a key-value at the time of compaction
-  //.setCompactionFilter(???)
-  //.setCompactionFilterFactory(AbstractCompactionFilterFactory)}
+  // A CompactionFilter allows an application to modify/delete a key-value at the time of compaction
+  // .setCompactionFilter(???)
+  // .setCompactionFilterFactory(AbstractCompactionFilterFactory)}
 
-  //By default a hash of every whole key is added to the bloom filter. This can be disabled by setting BlockBasedTableOptions::whole_key_filtering to false
-  //.setTableFormatConfig(new BlockBasedTableConfig().setWholeKeyFiltering(false))
+  // By default a hash of every whole key is added to the bloom filter. This can be disabled by setting BlockBasedTableOptions::whole_key_filtering to false
+  // .setTableFormatConfig(new BlockBasedTableConfig().setWholeKeyFiltering(false))
   // Define a prefix. In this way, a fixed length prefix extractor. A recommended one to use.
-  //.useFixedLengthPrefixExtractor(3)
+  // .useFixedLengthPrefixExtractor(3)
 
-  //Putting read_options.total_order_seek = true will make sure the query returns the same result as if there is no prefix bloom filter.
-  //new ReadOptions().setTotalOrderSeek(false)
+  // Putting read_options.total_order_seek = true will make sure the query returns the same result as if there is no prefix bloom filter.
+  // new ReadOptions().setTotalOrderSeek(false)
 
   val txnDbOptions = new TransactionDBOptions()
   val writeOptions = new WriteOptions()
@@ -265,12 +265,12 @@ class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends A
     if (!p.toFile.exists())
       Files.createDirectory(p)
 
-    //SkipListMemTableConfig
+    // SkipListMemTableConfig
     log.info("------- DB file path: {} memTable: {} ", dbPath, options.memTableConfig().getClass.getSimpleName)
 
     receptionist ! Receptionist.Register(MVCCStorageBackend.Key, self)
 
-    MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter ⇒
+    MVCCStorageBackend.managedIter(txnDb.newIterator(new ReadOptions()), log) { iter =>
       iter.seekToFirst
       while (iter.isValid) {
         val key   = new String(iter.key, UTF_8)
@@ -288,33 +288,35 @@ class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends A
 
   def put(key: String, value: String, replyTo: ActorRef[ReservationReply]): ReservationReply =
     txn
-      .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn ⇒
-        //Guards against Read-Write Conflicts:
+      .withTxn(txnDb.beginTransaction(writeOptions, new TransactionOptions().setSetSnapshot(true)), log) { txn =>
+        // Guards against Read-Write Conflicts:
         // txn.getForUpdate ensures that no other writer modifies any keys that were read by this transaction.
 
         log.warning("Put: {}:{}", key, value)
         val snapshot = txn.getSnapshot
         val keyBytes = key.getBytes(UTF_8)
 
-        //READ to know how many vouchers have been sold
+        // READ to know how many vouchers have been sold
         val salesBts = txn.getForUpdate(new ReadOptions().setSnapshot(snapshot), keyBytes, true)
 
-        //txn.getIterator(new ReadOptions().setSnapshot(snapshot))
+        // txn.getIterator(new ReadOptions().setSnapshot(snapshot))
 
-        //get multiple keys txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
-        //https://github.com/facebook/rocksdb/blob/189f0c27aaecdf17ae7fc1f826a423a28b77984f/java/src/test/java/org/rocksdb/OptimisticTransactionTest.java#L96
-        //if at least one key from that set of keys was modified between multiGetForUpdate, put|merge and commit,
-        //we get RocksDBException with Status.Code.Busy
+        // txn.multiGetForUpdateAsList(new ReadOptions().setSnapshot(snapshot), java.util.Arrays.asList(keyBytes, keyBytes))
 
-        //get multiple keys
+        // get multiple keys txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
+        // https://github.com/facebook/rocksdb/blob/189f0c27aaecdf17ae7fc1f826a423a28b77984f/java/src/test/java/org/rocksdb/OptimisticTransactionTest.java#L96
+        // if at least one key from that set of keys was modified between multiGetForUpdate, put|merge and commit,
+        // we get RocksDBException with Status.Code.Busy
 
-        //txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), Array(keyBytes, keyBytes))
+        // get multiple keys
+
+        // txn.multiGetForUpdate(new ReadOptions().setSnapshot(snapshot), java.util.Arrays.asList(keyBytes, keyBytes))
 
         val sales = Try(new String(salesBts, UTF_8).split(SEPARATOR)).getOrElse(Array.ofDim[String](0))
 
-        //WRITE sell if some left
+        // WRITE sell if some left
         if (sales.size < ticketsNum) {
-          //merge activates org.rocksdb.StringAppendOperator
+          // merge activates org.rocksdb.StringAppendOperator
           txn.merge(key.getBytes(UTF_8), value.getBytes(UTF_8))
           Some(key)
         } else None
@@ -325,21 +327,21 @@ class MVCCStorageBackend(receptionist: ActorRef[Receptionist.Command]) extends A
       )
 
   def write: Receive = {
-    case Buy(key, value, replyTo) ⇒
+    case Buy(key, value, replyTo) =>
       Future(put(key, value, replyTo)).mapTo[ReservationReply].pipeTo(self)
-    case r: ReservationReply ⇒
+    case r: ReservationReply =>
       r match {
-        case reply: ReservationReply.Success ⇒
+        case reply: ReservationReply.Success =>
           reply.replyTo.tell(reply)
-        case reply: ReservationReply.Failure ⇒
+        case reply: ReservationReply.Failure =>
           reply.replyTo ! reply
-        case reply: ReservationReply.Closed ⇒
+        case reply: ReservationReply.Closed =>
           reply.replyTo ! reply
       }
   }
 
   override def receive: Receive =
-    write /*orElse read*/ orElse { case scala.util.Failure(ex) ⇒
+    write /*orElse read*/ orElse { case scala.util.Failure(ex) =>
       log.error(ex, "Unexpected PUT error")
     }
 }

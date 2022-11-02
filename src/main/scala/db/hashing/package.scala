@@ -32,17 +32,16 @@ package object hashing {
     def validated(shard: Shard): Boolean
   }
 
-  /** Highest Random Weight (HRW) hashing
-    * https://github.com/clohfink/RendezvousHash
-    * https://www.pvk.ca/Blog/2017/09/24/rendezvous-hashing-my-baseline-consistent-distribution-method/
-    * A random uniform way to partition your keyspace up among the available nodes
+  /** Highest Random Weight (HRW) hashing https://github.com/clohfink/RendezvousHash
+    * https://www.pvk.ca/Blog/2017/09/24/rendezvous-hashing-my-baseline-consistent-distribution-method/ A random uniform
+    * way to partition your keyspace up among the available nodes
     */
   trait Rendezvous[ShardId] extends Hashing[ShardId] {
     override val seed = 512L
     override val name = "rendezvous-hashing"
 
     implicit val ord: Ordering[(Long, ShardId)] =
-      (x: (Long, ShardId), y: (Long, ShardId)) ⇒ -x._1.compare(y._1)
+      (x: (Long, ShardId), y: (Long, ShardId)) => -x._1.compare(y._1)
 
     protected val members = new ConcurrentSkipListSet[ShardId]()
 
@@ -64,7 +63,7 @@ package object hashing {
         val nodeBytes       = toBinary(shard)
         val keyAndShard     = ByteBuffer.allocate(keyBytes.length + nodeBytes.length).put(keyBytes).put(nodeBytes)
         val shardHash128bit = CassandraMurmurHash.hash3_x64_128(keyAndShard, 0, keyAndShard.array.length, seed)(1)
-        candidates = candidates + (shardHash128bit → shard)
+        candidates = candidates + (shardHash128bit -> shard)
       }
       candidates.take(rf).map(_._2)(Ordering.by[ShardId, String](_.toString))
     }
@@ -110,7 +109,7 @@ package object hashing {
     }
 
     override def remove(shard: T): Boolean =
-      (0 to numberOfVNodes).foldLeft(true) { (acc, vNodeId) ⇒
+      (0 to numberOfVNodes).foldLeft(true) { (acc, vNodeId) =>
         val vNodeSuffix = Array.ofDim[Byte](4)
         writeInt(vNodeSuffix, vNodeId, 0)
         val bytes          = toBinary(shard) ++ vNodeSuffix
@@ -119,9 +118,9 @@ package object hashing {
       }
 
     override def add(shard: T): Boolean =
-      //Hash each node to several numberOfVNodes
+      // Hash each node to several numberOfVNodes
       if (validated(shard))
-        (0 to numberOfVNodes).foldLeft(true) { (acc, i) ⇒
+        (0 to numberOfVNodes).foldLeft(true) { (acc, i) =>
           val suffix = Array.ofDim[Byte](4)
           writeInt(suffix, i, 0)
           val shardBytes = toBinary(shard) ++ suffix

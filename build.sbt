@@ -13,7 +13,7 @@ val `akka-db` = project
   .settings(
     name := "akka-db",
     version := "0.0.1",
-    scalaVersion := "2.13.8",
+    scalaVersion := "2.13.10",
 
     //scalacOptions in Compile ++= Seq("-deprecation", "-feature", "-unchecked", "-Xlog-reflective-calls", "-Xlint"),
 
@@ -25,13 +25,13 @@ val `akka-db` = project
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
 
       "com.typesafe.akka" %% "akka-slf4j" % akkaVersion,
-      "ch.qos.logback" % "logback-classic" % "1.2.11",
+      "ch.qos.logback" % "logback-classic" % "1.4.4",
       
       //"com.google.guava"  % "guava" % "30.1.1-jre",
 
       //"org.rocksdb" % "rocksdbjni" %  "6.10.2",  //Jun, 2020
-      "org.rocksdb" % "rocksdbjni" % "7.1.2", //May 07, 2021
-
+      //  7.1.2 May 07, 2021
+      "org.rocksdb" % "rocksdbjni" % "7.6.0", //31Oct 2022
 
       //https://github.com/wjglerum/IoT-collector.git
       //"io.waylay.influxdb" %% "influxdb-scala" % "2.0.1"
@@ -45,7 +45,9 @@ val `akka-db` = project
       "com.typesafe.akka" %% "akka-multi-node-testkit" % akkaVersion,
 
       //"org.hdrhistogram"  % "HdrHistogram" %  "2.1.10",
-      "com.lihaoyi" % "ammonite" % "2.5.2" % "test" cross CrossVersion.full,
+      //"2.5.5-15-277624cf"
+      //2.5.5
+      "com.lihaoyi" % "ammonite" % "2.5.5-15-277624cf" % "test" cross CrossVersion.full,
       
     ),
 

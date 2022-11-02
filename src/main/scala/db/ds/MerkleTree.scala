@@ -38,7 +38,7 @@ object MerkleTree {
         var trees: Seq[MerkleTreeView] = leafs.toSeq
 
         while (trees.length > 1)
-          trees = trees.grouped(2).map(x ⇒ combine(x(0), x(1))).toSeq
+          trees = trees.grouped(2).map(x => combine(x(0), x(1))).toSeq
 
         trees.head
       }
@@ -55,9 +55,9 @@ object MerkleTree {
       def toMerkle(mt: MerkleTreeView): MerkleTree = {
         counter += 1
         mt match {
-          case Node(digest, left, right) ⇒
+          case Node(digest, left, right) =>
             TreeNode(NodeId(counter), digest, toMerkle(left), toMerkle(right))
-          case Leaf(digest) ⇒
+          case Leaf(digest) =>
             TreeLeaf(NodeId(counter), digest)
         }
       }
@@ -84,24 +84,24 @@ object MerkleTree {
     if (merkleTree.nodeId == nodeId) Some(merkleTree)
     else
       merkleTree match {
-        case TreeNode(_, _, left, right) ⇒
+        case TreeNode(_, _, left, right) =>
           if (nodeId.v >= right.nodeId.v) nodeById(nodeId, right) else nodeById(nodeId, left)
-        case _ ⇒ None
+        case _ => None
       }
 
 }
 
 object Runner extends App {
-  //Seq[Block]
+  // Seq[Block]
 
   val blocks = Array(
     Array[Byte](1, 2, 3),
     Array[Byte](4, 5, 6),
     Array[Byte](7, 8, 9),
     Array[Byte](10, 11, 12)
-    //Array[Byte](20, 21, 22)
-    //Array[Byte](30, 31, 32),
-    //Array[Byte](40, 41, 42),
+    // Array[Byte](20, 21, 22)
+    // Array[Byte](30, 31, 32),
+    // Array[Byte](40, 41, 42),
   )
 
   val blocks2 = Array(
@@ -109,9 +109,9 @@ object Runner extends App {
     Array[Byte](4, 5, 6),
     Array[Byte](7, 8, 9),
     Array[Byte](10, 11, 121)
-    //Array[Byte](20, 21, 23)
-    //Array[Byte](30, 31, 32),
-    //Array[Byte](40, 41, 42),
+    // Array[Byte](20, 21, 23)
+    // Array[Byte](30, 31, 32),
+    // Array[Byte](40, 41, 42),
   )
 
   val blocks3 = Array(
@@ -121,7 +121,7 @@ object Runner extends App {
     Array[Byte](10, 11, 12)
   )
 
-  //MerkleTree.fromArrays(blocks3)(MerkleDigest.MD5)
+  // MerkleTree.fromArrays(blocks3)(MerkleDigest.MD5)
 
   /*
     4 keys means the tree with contain 6 hashes
@@ -141,8 +141,8 @@ object Runner extends App {
   val a   = MerkleTree.nodeById(one, tree1).get.digest
   val b   = MerkleTree.nodeById(one, tree2).get.digest
 
-  //println(a.toString)
-  //println(b.toString)
+  // println(a.toString)
+  // println(b.toString)
   println(java.util.Arrays.equals(a.hash, b.hash))
 
   val two = NodeId(6)
@@ -153,10 +153,10 @@ object Runner extends App {
   val digest1 = tree1.digest
   val digest2 = tree2.digest
 
-  //println(digest1.hash.mkString(","))
+  // println(digest1.hash.mkString(","))
 
-  //If the hash values of the root of two trees are equal, then its meaning that leaf nodes are equal
-  //(there is no point in doing synchronization since)
+  // If the hash values of the root of two trees are equal, then its meaning that leaf nodes are equal
+  // (there is no point in doing synchronization since)
 
   digest1.hash sameElements digest2.hash
   val r = java.util.Arrays.equals(digest1.hash, digest2.hash)

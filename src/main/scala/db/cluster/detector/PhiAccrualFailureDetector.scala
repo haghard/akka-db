@@ -4,15 +4,15 @@ import scala.concurrent.duration._
 
 object PhiAccrualFailureDetector {
 
-  abstract class Clock extends (() ⇒ Long)
+  abstract class Clock extends (() => Long)
 
-  val defaultClock: Clock = () ⇒ System.currentTimeMillis
+  val defaultClock: Clock = () => System.currentTimeMillis
 
   def calculateUpProbability(timestamps: List[Long]): Byte = {
     val timestampsSorted = timestamps.sorted
     val first            = timestampsSorted.head
     val diffs = timestampsSorted
-      .foldLeft((Vector.empty[Long], first)) { case ((deltas, last), next) ⇒
+      .foldLeft((Vector.empty[Long], first)) { case ((deltas, last), next) =>
         (deltas :+ (next - last), next)
       }
       ._1
@@ -28,7 +28,7 @@ object PhiAccrualFailureDetector {
 case class PhiAccrualFailureDetector(timestamps: IndexedSeq[Long])(implicit clock: PhiAccrualFailureDetector.Clock) {
 
   val intervals = timestamps
-    .foldLeft((Vector.empty[Long], timestamps.head)) { case ((deltas, last), next) ⇒
+    .foldLeft((Vector.empty[Long], timestamps.head)) { case ((deltas, last), next) =>
       (deltas :+ (next - last), next)
     }
     ._1
@@ -37,7 +37,7 @@ case class PhiAccrualFailureDetector(timestamps: IndexedSeq[Long])(implicit cloc
 
   val intervalSum: Long = intervals.sum
 
-  val squaredIntervalSum: Long = intervals.foldLeft(0L) { case (acc, interval) ⇒ acc + pow2(interval) }
+  val squaredIntervalSum: Long = intervals.foldLeft(0L) { case (acc, interval) => acc + pow2(interval) }
 
   def mean: Double = intervalSum.toDouble / intervals.size
 
@@ -56,18 +56,15 @@ case class PhiAccrualFailureDetector(timestamps: IndexedSeq[Long])(implicit cloc
 
   /** The suspicion level of the accrual failure detector.
     *
-    * If a connection does not have any records in failure detector then it is
-    * considered healthy.
+    * If a connection does not have any records in failure detector then it is considered healthy.
     */
   def phi: Double = phi(clock())
 
-  /** Calculation of phi, derived from the Cumulative distribution function for
-    * N(mean, stdDeviation) normal distribution, given by
-    * 1.0 / (1.0 + math.exp(-y * (1.5976 + 0.070566 * y * y)))
-    * where y = (x - mean) / standard_deviation
-    * This is an approximation defined in β Mathematics Handbook (Logistic approximation).
-    * Error is 0.00014 at +- 3.16
-    * The calculated value is equivalent to -log10(1 - CDF(y))
+  /** Calculation of phi, derived from the Cumulative distribution function for N(mean, stdDeviation) normal
+    * distribution, given by
+    * 1.0 / (1.0 + math.exp(-y * (1.5976 + 0.070566 * y * y))) where y = (x - mean) / standard_deviation This is an
+    * approximation defined in β Mathematics Handbook (Logistic approximation). Error is 0.00014 at +- 3.16 The
+    * calculated value is equivalent to -log10(1 - CDF(y))
     */
   def phi(timeDiff: Long, mean: Double, stdDeviation: Double): Double = {
     val y = (timeDiff - mean) / stdDeviation

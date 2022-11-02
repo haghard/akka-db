@@ -98,13 +98,12 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
     */
   def ==(that: VersionVector[T]): Boolean = compareOnlyTo(that, Same) eq Same
 
-  /** Version vector comparison according to the semantics described by compareTo, with the ability to bail
-    * out early if the we can't reach the Ordering that we are looking for.
+  /** Version vector comparison according to the semantics described by compareTo, with the ability to bail out early if
+    * the we can't reach the Ordering that we are looking for.
     *
-    * The ordering always starts with Same and can then go to Same, Before or After
-    * If we're on After we can only go to After or Concurrent
-    * If we're on Before we can only go to Before or Concurrent
-    * If we go to Concurrent we exit the loop immediately
+    * The ordering always starts with Same and can then go to Same, Before or After If we're on After we can only go to
+    * After or Concurrent If we're on Before we can only go to Before or Concurrent If we go to Concurrent we exit the
+    * loop immediately
     *
     * If you send in the ordering FullOrder, you will get a full comparison.
     */
@@ -116,7 +115,7 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
       if ((requestedOrder ne FullOrder) && (currentOrder ne Same) && (currentOrder ne requestedOrder)) currentOrder
 
       (i1, i2) match {
-        case (h1 +: t1, h2 +: t2) ⇒
+        case (h1 +: t1, h2 +: t2) =>
           // compare the nodes
           val nc = ord.compare(h1._1, h2._1)
           if (nc == 0)
@@ -140,15 +139,15 @@ case class VersionVector[T: scala.Ordering](elems: SortedMap[T, Long]) extends V
           if (currentOrder eq After) Concurrent
           else compare(h1 +: t1, t2, Before)
 
-        case (h1 +: t1, _) ⇒
+        case (h1 +: t1, _) =>
           // i2 is empty but i1 is not, so i1 can only be After
           if (currentOrder eq Before) Concurrent else After
 
-        case (_, h2 +: t2) ⇒
+        case (_, h2 +: t2) =>
           // i1 is empty but i2 is not, so i1 can only be Before
           if (currentOrder eq After) Concurrent else Before
 
-        case _ ⇒
+        case _ =>
           currentOrder
       }
     }

@@ -31,28 +31,27 @@ object HashRing {
   case object Write extends Protocol
 
   def apply(rf: Int, replicaId: Long): Behavior[Protocol] =
-    Behaviors.setup { ctx ⇒
+    Behaviors.setup { ctx =>
       ctx.log.info("{} Starting up replica", replicaId)
       val c = Cluster(ctx.system)
       c.subscriptions ! akka.cluster.typed
-        .Subscribe(ctx.messageAdapter[SelfUp] { case SelfUp(_) ⇒ SelfUpDb }, classOf[SelfUp])
+        .Subscribe(ctx.messageAdapter[SelfUp] { case SelfUp(_) => SelfUpDb }, classOf[SelfUp])
       selfUp(c, replicaId, rf)
     }
 
   def selfUp(c: Cluster, replicaId: Long, rf: Int): Behavior[Protocol] =
-    Behaviors.receive { (ctx, _) ⇒
+    Behaviors.receive { (ctx, _) =>
       c.subscriptions ! Unsubscribe(ctx.self)
 
       ctx.system.receptionist ! akka.actor.typed.receptionist.Receptionist.Subscribe(
         MVCCStorageBackend.Key,
         ctx.messageAdapter[akka.actor.typed.receptionist.Receptionist.Listing] {
-          case MVCCStorageBackend.Key.Listing(replicas) ⇒ MembershipChanged(replicas)
+          case MVCCStorageBackend.Key.Listing(replicas) => MembershipChanged(replicas)
         }
       )
 
-      Behaviors.withTimers[Protocol] { timers ⇒
+      Behaviors.withTimers[Protocol] { timers =>
         timers.startTimerAtFixedRate(Write, 3000.millis)
-        //timers.startSingleTimer(Write, Write, 3000.millis)
 
         running(
           Rendezvous[Replica],
@@ -64,6 +63,8 @@ object HashRing {
       }
     }
 
+  //
+
   def running(
     hash: Rendezvous[Replica],
     storages: SortedMap[Address, ActorRef[MVCCStorageBackend.Protocol]],
@@ -72,36 +73,36 @@ object HashRing {
     rf: Int
   )(implicit ctx: ActorContext[Protocol], to: Timeout): Behavior[Protocol] =
     Behaviors.receiveMessagePartial {
-      case MembershipChanged(rs) ⇒
-        //TODO: handle it properly. You need to reconstruct the whole ring from the ground up
+      case MembershipChanged(rs) =>
+        // TODO: handle it properly. You need to reconstruct the whole ring from the ground up
         ctx.log.warn("★ ★ ★ {} ClusterMembership:{}", replicaId, rs.mkString(","))
 
-        //idempotent add
-        rs.foreach(r ⇒
+        // idempotent add
+        rs.foreach(r =>
           if (r.path.address.hasLocalScope) hash.add(Replica(selfAddress)) else hash.add(Replica(r.path.address))
         )
 
-        val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) ⇒
-          if (ref.path.address.hasLocalScope) acc + (selfAddress → ref)
-          else acc + (ref.path.address                           → ref)
+        val replicas = rs.foldLeft(TreeMap.empty[Address, ActorRef[MVCCStorageBackend.Protocol]]) { (acc, ref) =>
+          if (ref.path.address.hasLocalScope) acc + (selfAddress -> ref)
+          else acc + (ref.path.address                           -> ref)
         }
         running(hash, replicas, selfAddress, replicaId, rf)
 
-      case Write ⇒
+      case Write =>
         implicit val ec  = ctx.executionContext
         implicit val sch = ctx.system.scheduler
 
         val voucher           = voucherKeys(ThreadLocalRandom.current.nextInt(0, voucherKeys.size))
         val replicas          = Try(hash.memberFor(voucher, rf)).getOrElse(Set.empty)
-        val storageForReplica = replicas.map(r ⇒ storages.get(r.addr)).flatten
+        val storageForReplica = replicas.map(r => storages.get(r.addr)).flatten
         ctx.log.info("{} goes to:[{}]. All replicas:[{}]", voucher, replicas.mkString(","), storages)
 
-        //TODO: this use case is not save because
+        // TODO: this use case is not save because
         // What if it succeeds on one replica and fails on another ???
         // If N concurrent clients hit the same key at the same time on different replicas, different winners are possible.
 
         Future
-          .traverse(storageForReplica.toVector) { replica ⇒
+          .traverse(storageForReplica.toVector) { replica =>
             replica.ask[ReservationReply](Buy(voucher, System.nanoTime.toString, _))
           }
 

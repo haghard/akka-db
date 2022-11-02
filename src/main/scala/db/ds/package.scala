@@ -4,7 +4,7 @@ package object ds {
 
   type Block = Array[Byte]
 
-  final case class Digest(hash: Array[Byte]) extends AnyVal { self ⇒
+  final case class Digest(hash: Array[Byte]) extends AnyVal { self =>
 
     def ++(that: Digest) = Digest(self.hash ++ that.hash)
 
@@ -17,11 +17,11 @@ package object ds {
 
     private def bytes2Hex(bytes: Array[Byte]): String = {
       val sb = new StringBuilder
-      bytes.foreach(b ⇒ sb.append(String.format("%02X", b: java.lang.Byte)))
+      bytes.foreach(b => sb.append(String.format("%02X", b: java.lang.Byte)))
       sb.toString
     }
 
-    //com.google.common.io.BaseEncoding.base16().lowerCase().encode(self.hash)
+    // com.google.common.io.BaseEncoding.base16().lowerCase().encode(self.hash)
     override def toString: String = bytes2Hex(self.hash)
   }
 
